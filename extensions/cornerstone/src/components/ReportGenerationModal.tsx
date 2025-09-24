@@ -210,6 +210,8 @@ export default function ReportGenerationModal({ hide }: ReportGenerationModalPro
 
   const handleSubmitReport = async (htmlContent: string) => {
     const studyInstanceUID = getStudyInstanceUID();
+    const urlParams = new URLSearchParams(window.location.search);
+    const userId = urlParams.get('userId');
 
     if (!htmlContent || htmlContent.trim() === '' || htmlContent === '<p>&nbsp;</p>') {
       console.error('Error: Content is empty or contains only whitespace');
@@ -220,9 +222,14 @@ export default function ReportGenerationModal({ hide }: ReportGenerationModalPro
       const report = await axios.post('http://localhost:4000/report', {
         studyInstanceUID: studyInstanceUID,
         htmlContent: htmlContent,
+        status: 'submitted',
       });
       console.log('Report submitted successfully:', report.data);
-      hide();
+      if (userId) {
+        window.location.href = `http://localhost:3000/doctor/${userId}/reports`;
+      } else {
+        hide();
+      }
     } catch (error) {
       console.error('Error submitting report:', error.response?.data || error.message);
     }

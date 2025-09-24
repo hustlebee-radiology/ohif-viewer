@@ -33,6 +33,10 @@ export default function ReportGenerationModal({ hide }: ReportGenerationModalPro
   const [isRecording, setIsRecording] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [dictationText, setDictationText] = useState('');
+  const wsRef = useRef<WebSocket | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
+  const WS_URL = 'ws://localhost:4000';
 
   const fetchModality = async () => {
     try {
@@ -87,24 +91,78 @@ export default function ReportGenerationModal({ hide }: ReportGenerationModalPro
   };
 
   const handleStartRecording = () => {
+    if (isRecording) {
+      return;
+    }
     setIsRecording(true);
     setIsPaused(false);
-    setDictationText('Start dictating.....');
-    // TODO: Implement actual speech recognition
-    console.log('Starting dictation...');
+    setDictationText('');
+    try {
+      const ws = new WebSocket(WS_URL);
+      wsRef.current = ws;
+      ws.onopen = async () => {
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          mediaStreamRef.current = stream;
+          const mr = new MediaRecorder(stream, {
+            mimeType: 'audio/webm;codecs=opus',
+            audioBitsPerSecond: 128000,
+          });
+          mediaRecorderRef.current = mr;
+          mr.ondataavailable = async e => {
+            if (e.data && e.data.size > 0 && ws.readyState === WebSocket.OPEN) {
+              const buf = await e.data.arrayBuffer();
+              ws.send(buf);
+            }
+          };
+          mr.start(250);
+        } catch (err) {
+          console.error('Mic access failed:', err);
+        }
+      };
+      ws.onmessage = evt => {
+        const text = typeof evt.data === 'string' ? evt.data : '';
+        if (text) {
+          setDictationText(prev => (prev ? prev + ' ' : '') + text);
+        }
+      };
+      ws.onerror = err => {
+        console.error('WS error:', err);
+      };
+      ws.onclose = () => {
+        // no-op
+      };
+    } catch (e) {
+      console.error('WS connect failed:', e);
+    }
   };
 
   const handlePauseRecording = () => {
-    setIsPaused(true);
-    // TODO: Implement pause functionality
-    console.log('Pausing dictation...');
+    if (!isRecording || isPaused) {
+      return;
+    }
+    try {
+      mediaRecorderRef.current?.pause();
+      setIsPaused(true);
+    } catch (e) {
+      console.error('Pause failed:', e);
+    }
   };
 
   const handleStopRecording = () => {
-    setIsRecording(false);
-    setIsPaused(false);
-    // TODO: Implement stop functionality
-    console.log('Stopping dictation...');
+    try {
+      mediaRecorderRef.current?.stop();
+      mediaRecorderRef.current = null;
+      mediaStreamRef.current?.getTracks().forEach(t => t.stop());
+      mediaStreamRef.current = null;
+      wsRef.current?.close();
+      wsRef.current = null;
+    } catch (e) {
+      console.error('Stop failed:', e);
+    } finally {
+      setIsRecording(false);
+      setIsPaused(false);
+    }
   };
 
   const handleSubmitDictation = () => {

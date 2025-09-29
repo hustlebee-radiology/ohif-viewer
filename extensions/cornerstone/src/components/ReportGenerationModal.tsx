@@ -37,9 +37,8 @@ export default function ReportGenerationModal({ hide }: ReportGenerationModalPro
   const wsRef = useRef<WebSocket | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
-  const API_BASE =
-    ((typeof process !== 'undefined' && (process as any)?.env?.NEXT_API_BASE_URL) as string) ||
-    'http://localhost:4000';
+  const API_BASE = (typeof process !== 'undefined' &&
+    (process as any)?.env?.NEXT_API_BASE_URL) as string;
   const WS_URL = API_BASE.replace(/^http/, 'ws');
 
   const fetchModality = async () => {

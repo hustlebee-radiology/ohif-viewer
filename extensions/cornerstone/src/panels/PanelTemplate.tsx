@@ -19,6 +19,9 @@ declare global {
 }
 
 export default function PanelTemplate() {
+  const API_BASE =
+    ((typeof process !== 'undefined' && (process as any)?.env?.NEXT_API_BASE_URL) as string) ||
+    'http://localhost:4000';
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [templates, setTemplates] = useState([]);
   const [content, setContent] = useState('');
@@ -35,7 +38,7 @@ export default function PanelTemplate() {
       }
 
       const response = await axios.get(
-        `http://localhost:4000/dicom/study-by-study-instance-uuid/${studyInstanceUuid}`
+        `${API_BASE}/dicom/study-by-study-instance-uuid/${studyInstanceUuid}`
       );
       console.log('Study data:', response.data);
       const studyData = response.data;
@@ -52,7 +55,7 @@ export default function PanelTemplate() {
   // Fetch templates (unfiltered)
   const fetchTemplates = async (modality?: string) => {
     try {
-      const response = await axios.get('http://localhost:4000/template', {
+      const response = await axios.get(`${API_BASE}/template`, {
         params: modality ? { modality } : undefined,
       });
       setTemplates(response.data);
@@ -160,7 +163,7 @@ function TinyMCEEditor({ content }: { content: string }) {
     }
 
     try {
-      const report = await axios.post('http://localhost:4000/report', {
+      const report = await axios.post(`${API_BASE}/report`, {
         studyInstanceUID: studyInstanceUID,
         htmlContent: htmlContent, // Changed from 'content' to 'htmlContent' to match server expectation
       });
@@ -175,7 +178,7 @@ function TinyMCEEditor({ content }: { content: string }) {
   // Function to fetch all reports
   const refreshReports = async () => {
     try {
-      const response = await axios.get('http://localhost:4000/report');
+      const response = await axios.get(`${API_BASE}/report`);
       console.log('Reports refreshed:', response.data);
     } catch (error) {
       console.error('Error refreshing reports:', error.response?.data || error.message);
@@ -234,7 +237,7 @@ function TinyMCEEditor({ content }: { content: string }) {
                 try {
                   console.log('Validating study exists for UID:', uid);
                   await axios.get(
-                    `http://localhost:4000/dicom/study-by-study-instance-uuid/${encodeURIComponent(uid)}`
+                    `${API_BASE}/dicom/study-by-study-instance-uuid/${encodeURIComponent(uid)}`
                   );
                 } catch (e) {
                   console.error(

@@ -33,10 +33,14 @@ export default function ReportGenerationModal({ hide }: ReportGenerationModalPro
   const [isRecording, setIsRecording] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [dictationText, setDictationText] = useState('');
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
-  const WS_URL = 'ws://localhost:4000';
+  const API_BASE =
+    ((typeof process !== 'undefined' && (process as any)?.env?.NEXT_API_BASE_URL) as string) ||
+    'http://localhost:4000';
+  const WS_URL = API_BASE.replace(/^http/, 'ws');
 
   const fetchModality = async () => {
     try {
@@ -49,7 +53,7 @@ export default function ReportGenerationModal({ hide }: ReportGenerationModalPro
       }
 
       const response = await axios.get(
-        `http://localhost:4000/dicom/study-by-study-instance-uuid/${studyInstanceUuid}`
+        `${API_BASE}/dicom/study-by-study-instance-uuid/${studyInstanceUuid}`
       );
       console.log('Study data:', response.data);
       const studyData = response.data;
@@ -64,7 +68,7 @@ export default function ReportGenerationModal({ hide }: ReportGenerationModalPro
 
   const fetchTemplates = async (modality?: string) => {
     try {
-      const response = await axios.get('http://localhost:4000/template', {
+      const response = await axios.get(`${API_BASE}/template`, {
         params: modality ? { modality } : undefined,
       });
       setTemplates(response.data);
@@ -165,11 +169,27 @@ export default function ReportGenerationModal({ hide }: ReportGenerationModalPro
     }
   };
 
-  const handleSubmitDictation = () => {
-    // TODO: Process dictation text and add to report
-    console.log('Submitting dictation:', dictationText);
-    setContent(prevContent => prevContent + '\n\n' + dictationText);
-    handleCloseDictation();
+  const handleSubmitDictation = async () => {
+    if (!dictationText && !content) {
+      return;
+    }
+    try {
+      setIsAnalyzing(true);
+      const response = await axios.post(`${API_BASE}/google-generative-ai/generate`, {
+        dictationText: dictationText,
+        templateContent: content,
+      });
+      const generated =
+        response?.data?.htmlContent ?? response?.data?.content ?? response?.data ?? '';
+      if (typeof generated === 'string' && generated.trim().length > 0) {
+        setContent(generated);
+      }
+      handleCloseDictation();
+    } catch (error: any) {
+      console.error('AI analysis failed:', error?.response?.data || error?.message || error);
+    } finally {
+      setIsAnalyzing(false);
+    }
   };
 
   const handleSubmitReport = async (htmlContent: string) => {
@@ -181,7 +201,7 @@ export default function ReportGenerationModal({ hide }: ReportGenerationModalPro
     }
 
     try {
-      const report = await axios.post('http://localhost:4000/report', {
+      const report = await axios.post(`${API_BASE}/report`, {
         studyInstanceUID: studyInstanceUID,
         htmlContent: htmlContent,
       });
@@ -294,6 +314,7 @@ export default function ReportGenerationModal({ hide }: ReportGenerationModalPro
                 onPause={handlePauseRecording}
                 onStop={handleStopRecording}
                 onSubmit={handleSubmitDictation}
+                isAnalyzing={isAnalyzing}
               />
             </div>
           </div>
@@ -458,6 +479,7 @@ function DictationPanel({
   onPause,
   onStop,
   onSubmit,
+  isAnalyzing,
 }: {
   isRecording: boolean;
   isPaused: boolean;
@@ -466,6 +488,7 @@ function DictationPanel({
   onPause: () => void;
   onStop: () => void;
   onSubmit: () => void;
+  isAnalyzing?: boolean;
 }) {
   return (
     <Card className="h-full">
@@ -525,9 +548,14 @@ function DictationPanel({
             variant="default"
             size="sm"
             onClick={onSubmit}
-            disabled={!dictationText || dictationText === 'Start dictating.....'}
+            disabled={isAnalyzing || !dictationText || dictationText === 'Start dictating.....'}
           >
-            Submit
+            <img
+              src="/assets/icons/ai-analysis.svg"
+              alt="AI"
+              className="mr-2 h-4 w-4"
+            />
+            {isAnalyzing ? 'Analyzing...' : 'AI Analysis'}
           </Button>
         </div>
       </CardContent>

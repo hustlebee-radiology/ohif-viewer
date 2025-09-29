@@ -19,9 +19,8 @@ declare global {
 }
 
 export default function PanelTemplate() {
-  const API_BASE =
-    ((typeof process !== 'undefined' && (process as any)?.env?.NEXT_API_BASE_URL) as string) ||
-    'http://localhost:4000';
+  const API_BASE = (typeof process !== 'undefined' &&
+    (process as any)?.env?.NEXT_API_BASE_URL) as string;
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [templates, setTemplates] = useState([]);
   const [content, setContent] = useState('');

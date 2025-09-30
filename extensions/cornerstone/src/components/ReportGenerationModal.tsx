@@ -1,6 +1,6 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { Editor } from '@tinymce/tinymce-react';
-import axios from 'axios';
+import apiClient from '../../../../platform/app/src/utils/apiClient';
 import {
   Button,
   DropdownMenu,
@@ -25,6 +25,11 @@ interface ReportGenerationModalProps {
 }
 
 export default function ReportGenerationModal({ hide }: ReportGenerationModalProps) {
+  const WS_ENV = (typeof process !== 'undefined' &&
+    (process as any)?.env?.NEXT_WS_BASE_URL) as string;
+  const WS_URL =
+    (WS_ENV as string) ||
+    (process.env.NEXT_API_BASE_URL ? process.env.NEXT_API_BASE_URL.replace(/^http/, 'ws') : '');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [templates, setTemplates] = useState<
     Array<{ id: string; name: string; htmlContent: string }>
@@ -40,7 +45,7 @@ export default function ReportGenerationModal({ hide }: ReportGenerationModalPro
     signatureUrl: string;
   } | null>(null);
   // Loading state retained for future use; currently not shown in UI
-  const [isLoadingDoctor, setIsLoadingDoctor] = useState(false);
+  // const [isLoadingDoctor, setIsLoadingDoctor] = useState(false);
 
   const fetchModality = async () => {
     try {
@@ -52,8 +57,8 @@ export default function ReportGenerationModal({ hide }: ReportGenerationModalPro
         return undefined;
       }
 
-      const response = await axios.get(
-        `http://localhost:4000/dicom/study-by-study-instance-uuid/${studyInstanceUuid}`
+      const response = await apiClient.get(
+        `/dicom/study-by-study-instance-uuid/${studyInstanceUuid}`
       );
       console.log('Study data:', response.data);
       const studyData = response.data;
@@ -68,7 +73,7 @@ export default function ReportGenerationModal({ hide }: ReportGenerationModalPro
 
   const fetchTemplates = async (modality?: string) => {
     try {
-      const response = await axios.get('http://localhost:4000/template', {
+      const response = await apiClient.get('/template', {
         params: modality ? { modality } : undefined,
       });
       setTemplates(response.data);
@@ -92,9 +97,9 @@ export default function ReportGenerationModal({ hide }: ReportGenerationModalPro
   };
 
   // Fetch doctor details based on userId from URL
-  const fetchDoctorDetails = async () => {
+  const fetchDoctorDetails = useCallback(async () => {
     try {
-      setIsLoadingDoctor(true);
+      // setIsLoadingDoctor(true);
       const urlParams = new URLSearchParams(window.location.search);
       const userId = urlParams.get('userId');
 
@@ -103,7 +108,6 @@ export default function ReportGenerationModal({ hide }: ReportGenerationModalPro
         return;
       }
 
-      // Get token from localStorage, sessionStorage, or cookies
       const token =
         localStorage.getItem('token') ||
         sessionStorage.getItem('token') ||
@@ -126,31 +130,27 @@ export default function ReportGenerationModal({ hide }: ReportGenerationModalPro
       let response;
 
       if (token) {
-        // Try with JWT first
         try {
-          response = await axios.get(`http://localhost:4000/user/${userId}`, {
+          response = await apiClient.get(`/user/${userId}`, {
             headers: {
               Authorization: `Bearer ${token}`,
             },
           });
         } catch (error) {
           console.log('JWT request failed, trying without authentication:', error.response?.status);
-          // Fallback: try without authentication
-          response = await axios.get(`http://localhost:4000/user/${userId}`);
+          response = await apiClient.get(`/user/${userId}`);
         }
       } else {
         console.log('No token found, trying without authentication');
-        // Try without authentication
-        response = await axios.get(`http://localhost:4000/user/${userId}`);
+        response = await apiClient.get(`/user/${userId}`);
       }
       console.log('Doctor data:', response.data);
 
-      // Convert relative URL to absolute URL
       const signaturePath = response.data.signatureURL;
       const signatureUrl = signaturePath
         ? signaturePath.startsWith('http')
           ? signaturePath
-          : `http://localhost:4000${signaturePath}`
+          : `${process.env.NEXT_API_BASE_URL}${signaturePath}`
         : null;
 
       console.log('Signature URL details:', {
@@ -166,9 +166,9 @@ export default function ReportGenerationModal({ hide }: ReportGenerationModalPro
     } catch (error) {
       console.error('Error fetching doctor details:', error.response?.data || error.message);
     } finally {
-      setIsLoadingDoctor(false);
+      // setIsLoadingDoctor(false);
     }
-  };
+  }, []);
 
   const handleTemplateClick = (template: { id: string; name: string; htmlContent: string }) => {
     console.log('HTML Content:', template.htmlContent);
@@ -188,7 +188,6 @@ export default function ReportGenerationModal({ hide }: ReportGenerationModalPro
   };
 
   const handleSubmitDictation = () => {
-    // TODO: Process dictation text and add to report
     console.log('Submitting dictation:', dictationText);
     setContent(prevContent => prevContent + '\n\n' + dictationText);
     handleCloseDictation();
@@ -219,14 +218,15 @@ export default function ReportGenerationModal({ hide }: ReportGenerationModalPro
     }
 
     try {
-      const report = await axios.post('http://localhost:4000/report', {
+      const report = await apiClient.post('/report', {
         studyInstanceUID: studyInstanceUID,
         htmlContent: htmlContent,
         status: 'submitted',
       });
       console.log('Report submitted successfully:', report.data);
       if (userId) {
-        window.location.href = `http://localhost:3000/doctor/${userId}/reports`;
+        const origin = window.location.origin;
+        window.location.href = `${origin}/doctor/${userId}/reports`;
       } else {
         hide();
       }
@@ -249,13 +249,10 @@ export default function ReportGenerationModal({ hide }: ReportGenerationModalPro
   // Fetch doctor details on component mount
   useEffect(() => {
     fetchDoctorDetails();
-  }, []);
+  }, [fetchDoctorDetails]);
 
   return (
     <div className="container-report flex h-full flex-col p-4">
-      {/* Doctor Information is now only appended inside the editor content */}
-
-      {/* Template Selection Row */}
       <div className="mb-6 flex items-center gap-4">
         <div className="flex-1">
           <DropdownMenu
@@ -265,7 +262,6 @@ export default function ReportGenerationModal({ hide }: ReportGenerationModalPro
               if (open) {
                 const modality = await fetchModality();
                 await fetchTemplates(modality);
-                // If editor is empty, show doctor block alone for preview
                 if (!content || content.trim() === '') {
                   const doctorBlock = buildDoctorBlock();
                   setContent(doctorBlock);
@@ -327,11 +323,9 @@ export default function ReportGenerationModal({ hide }: ReportGenerationModalPro
         )}
       </div>
 
-      {/* Main Content Area */}
       <div className="h-full min-h-0 flex-1">
         {isDictationMode ? (
           <div className="flex h-full gap-4">
-            {/* Left Panel - Report Template */}
             <div className="flex-1">
               <TinyMCEEditor
                 content={content}
@@ -339,11 +333,11 @@ export default function ReportGenerationModal({ hide }: ReportGenerationModalPro
               />
             </div>
 
-            {/* Right Panel - Dictation */}
             <div className="w-1/2">
               <DictationPanel
                 onDictationTextChange={setDictationText}
                 onSubmit={handleSubmitDictation}
+                wsUrl={WS_URL}
               />
             </div>
           </div>
@@ -369,7 +363,6 @@ function TinyMCEEditor({
   const [initialValue, setInitialValue] = useState(content);
 
   useEffect(() => {
-    // If editor initialized, update content when parent content changes
     const editorInstance = editorRef.current as unknown as {
       setContent?: (v: string) => void;
     } | null;
@@ -513,9 +506,11 @@ function TinyMCEEditor({
 function DictationPanel({
   onDictationTextChange,
   onSubmit,
+  wsUrl,
 }: {
   onDictationTextChange: (text: string) => void;
   onSubmit: () => void;
+  wsUrl: string;
 }) {
   const [isRecording, setIsRecording] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
@@ -551,7 +546,7 @@ function DictationPanel({
 
   const handleStartRecording = async () => {
     try {
-      const ws = new WebSocket('ws://localhost:8000/ws/audio');
+      const ws = new WebSocket(wsUrl || '');
       websocketRef.current = ws;
 
       ws.onopen = () => {

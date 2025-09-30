@@ -9,11 +9,9 @@ const SRC_DIR = path.resolve(__dirname, './platform/app/src');
 const DIST_DIR = path.resolve(__dirname, './platform/app/dist');
 const PUBLIC_DIR = path.resolve(__dirname, './platform/app/public');
 
-// Environment variables (similar to webpack.pwa.js)
 const APP_CONFIG = process.env.APP_CONFIG || 'config/default.js';
 const PUBLIC_URL = process.env.PUBLIC_URL || '/';
 
-// Add these constants
 const NODE_ENV = process.env.NODE_ENV;
 const BUILD_NUM = process.env.CIRCLE_BUILD_NUM || '0';
 const VERSION_NUMBER = fs.readFileSync(path.join(__dirname, './version.txt'), 'utf8') || '';
@@ -23,7 +21,6 @@ const PROXY_DOMAIN = process.env.PROXY_DOMAIN;
 const PROXY_PATH_REWRITE_FROM = process.env.PROXY_PATH_REWRITE_FROM;
 const PROXY_PATH_REWRITE_TO = process.env.PROXY_PATH_REWRITE_TO;
 
-// Add port constant
 
 const OHIF_PORT = Number(process.env.OHIF_PORT || 3005);
 const OHIF_OPEN = process.env.OHIF_OPEN !== 'false';
@@ -34,6 +31,8 @@ export default defineConfig({
       index: `${SRC_DIR}/index.js`,
     },
     define: {
+      'process.env.NEXT_API_BASE_URL': JSON.stringify(process.env.NEXT_API_BASE_URL || ''),
+      'process.env.NEXT_WS_BASE_URL': JSON.stringify(process.env.NEXT_WS_BASE_URL || ''),
       'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV),
       'process.env.NODE_DEBUG': JSON.stringify(process.env.NODE_DEBUG),
       'process.env.DEBUG': JSON.stringify(process.env.DEBUG),
@@ -99,9 +98,7 @@ export default defineConfig({
   },
   output: {
     copy: [
-      // Copy plugin files (handled by writePluginImportsFile)
       ...(writePluginImportsFile(SRC_DIR, DIST_DIR) || []),
-      // Copy public directory except config and html-templates
       {
         from: path.resolve(__dirname, 'node_modules/onnxruntime-web/dist'),
         to: `${DIST_DIR}/ort`,
@@ -114,12 +111,10 @@ export default defineConfig({
           ignore: ['**/config/**', '**/html-templates/**', '.DS_Store'],
         },
       },
-      // Copy Google config
       {
         from: path.resolve(PUBLIC_DIR, 'config/google.js'),
         to: 'google.js',
       },
-      // Copy app config
       {
         from: path.resolve(PUBLIC_DIR, APP_CONFIG),
         to: 'app-config.js',
@@ -135,12 +130,10 @@ export default defineConfig({
   server: {
     port: OHIF_PORT,
     open: OHIF_OPEN,
-    // Configure proxy
     proxy: {
       '/dicomweb': {
         target: 'http://localhost:5000',
       },
-      // Add conditional proxy based on env vars
       ...(PROXY_TARGET && PROXY_DOMAIN
         ? {
             [PROXY_TARGET]: {
@@ -153,7 +146,6 @@ export default defineConfig({
           }
         : {}),
     },
-    // Configure history API fallback
     historyApiFallback: {
       disableDotRule: true,
       index: `${PUBLIC_URL}index.html`,

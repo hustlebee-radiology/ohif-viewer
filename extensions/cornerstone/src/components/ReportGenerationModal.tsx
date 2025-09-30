@@ -25,10 +25,12 @@ interface ReportGenerationModalProps {
 }
 
 export default function ReportGenerationModal({ hide }: ReportGenerationModalProps) {
-  const WS_ENV = (typeof process !== 'undefined' &&
-    (process as any)?.env?.NEXT_WS_BASE_URL) as string;
+  const WS_ENV: string | undefined =
+    typeof process !== 'undefined'
+      ? (process.env?.NEXT_WS_BASE_URL as string | undefined)
+      : undefined;
   const WS_URL =
-    (WS_ENV as string) ||
+    WS_ENV ||
     (process.env.NEXT_API_BASE_URL ? process.env.NEXT_API_BASE_URL.replace(/^http/, 'ws') : '');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [templates, setTemplates] = useState<
@@ -42,10 +44,8 @@ export default function ReportGenerationModal({ hide }: ReportGenerationModalPro
   const wsRef = useRef<WebSocket | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
-  const WS_URL = process.env.NEXT_API_BASE_URL
-    ? process.env.NEXT_API_BASE_URL.replace(/^http/, 'ws')
-    : '';
-
+  const [isRecording, setIsRecording] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
   const [doctorInfo, setDoctorInfo] = useState<{
     name: string;
     signatureUrl: string;
@@ -104,6 +104,7 @@ export default function ReportGenerationModal({ hide }: ReportGenerationModalPro
   const fetchDoctorDetails = useCallback(async () => {
     try {
       // setIsLoadingDoctor(true);
+      // Fetch doctor details on component mount
       const urlParams = new URLSearchParams(window.location.search);
       const userId = urlParams.get('userId');
 
@@ -171,6 +172,7 @@ export default function ReportGenerationModal({ hide }: ReportGenerationModalPro
       console.error('Error fetching doctor details:', error.response?.data || error.message);
     } finally {
       // setIsLoadingDoctor(false);
+      // Show success message or notification
     }
   }, []);
 
@@ -282,8 +284,9 @@ export default function ReportGenerationModal({ hide }: ReportGenerationModalPro
         setContent(generated);
       }
       handleCloseDictation();
-    } catch (error: any) {
-      console.error('AI analysis failed:', error?.response?.data || error?.message || error);
+    } catch (error: unknown) {
+      const err = error as { response?: { data?: unknown }; message?: string };
+      console.error('AI analysis failed:', err.response?.data ?? err.message ?? error);
     } finally {
       setIsAnalyzing(false);
     }
@@ -346,7 +349,6 @@ export default function ReportGenerationModal({ hide }: ReportGenerationModalPro
         status: 'draft',
       });
       console.log('Draft saved successfully:', draft.data);
-      // Show success message or notification
       alert('Draft saved successfully!');
     } catch (error) {
       console.error('Error saving draft:', error.response?.data || error.message);
@@ -365,7 +367,6 @@ export default function ReportGenerationModal({ hide }: ReportGenerationModalPro
     }
   }, [isDropdownOpen, templates.length]);
 
-  // Fetch doctor details on component mount
   useEffect(() => {
     fetchDoctorDetails();
   }, [fetchDoctorDetails]);

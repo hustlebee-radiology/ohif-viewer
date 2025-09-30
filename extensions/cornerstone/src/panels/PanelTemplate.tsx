@@ -3,7 +3,6 @@ import React, { useRef, useEffect, useState } from 'react';
 import { Editor } from '@tinymce/tinymce-react';
 import apiClient from '../../../../platform/app/src/utils/apiClient';
 
-// import './App.css';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -120,7 +119,6 @@ export default function PanelTemplate() {
 
       <div className="text-sm text-gray-400">Click to generate a comprehensive report.</div>
 
-      {/* TinyMCE Editor Section */}
       <div className="mt-4">
         <TinyMCEEditor content={content} />
       </div>
@@ -131,7 +129,6 @@ export default function PanelTemplate() {
 function TinyMCEEditor({ content }: { content: string }) {
   const editorRef = useRef(null);
 
-  // Get studyInstanceUID from URL parameters
   const getStudyInstanceUIDs = (): string[] => {
     const urlParams = new URLSearchParams(window.location.search);
     const value = urlParams.get('StudyInstanceUIDs') || '';
@@ -170,7 +167,6 @@ function TinyMCEEditor({ content }: { content: string }) {
     }
   };
 
-  // Function to fetch all reports
   const refreshReports = async () => {
     try {
       const response = await apiClient.get('/report');

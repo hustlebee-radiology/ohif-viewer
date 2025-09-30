@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { Editor } from '@tinymce/tinymce-react';
 import apiClient from '../../../../platform/app/src/utils/apiClient';
 import {
@@ -29,21 +29,31 @@ export default function ReportGenerationModal({
   hide,
   initialContent,
 }: ReportGenerationModalProps) {
+  const WS_ENV: string | undefined =
+    typeof process !== 'undefined'
+      ? (process.env?.NEXT_WS_BASE_URL as string | undefined)
+      : undefined;
+  const WS_URL =
+    WS_ENV ||
+    (process.env.NEXT_API_BASE_URL ? process.env.NEXT_API_BASE_URL.replace(/^http/, 'ws') : '');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
-  const [templates, setTemplates] = useState<any[]>([]);
+  const [templates, setTemplates] = useState<
+    Array<{ id: string; name: string; htmlContent: string }>
+  >([]);
   const [content, setContent] = useState(initialContent ?? '');
   const [templateName, setTemplateName] = useState('');
   const [isDictationMode, setIsDictationMode] = useState(false);
-  const [isRecording, setIsRecording] = useState(false);
-  const [isPaused, setIsPaused] = useState(false);
   const [dictationText, setDictationText] = useState('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
-  const WS_URL = process.env.NEXT_API_BASE_URL
-    ? process.env.NEXT_API_BASE_URL.replace(/^http/, 'ws')
-    : '';
+  const [isRecording, setIsRecording] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
+  const [doctorInfo, setDoctorInfo] = useState<{
+    name: string;
+    signatureUrl: string;
+  } | null>(null);
 
   const fetchModality = async () => {
     try {
@@ -80,9 +90,101 @@ export default function ReportGenerationModal({
     }
   };
 
-  const handleTemplateClick = (template: any) => {
+  // Helper function to get cookie value
+  const getCookie = (name: string): string | null => {
+    if (typeof document === 'undefined') {
+      return null;
+    }
+    const value = `; ${document.cookie}`;
+    const parts = value.split(`; ${name}=`);
+    if (parts.length === 2) {
+      const cookieValue = parts.pop()?.split(';').shift();
+      return cookieValue ? decodeURIComponent(cookieValue) : null;
+    }
+    return null;
+  };
+
+  // Fetch doctor details based on userId from URL
+  const fetchDoctorDetails = useCallback(async () => {
+    try {
+      // setIsLoadingDoctor(true);
+      // Fetch doctor details on component mount
+      const urlParams = new URLSearchParams(window.location.search);
+      const userId = urlParams.get('userId');
+
+      if (!userId) {
+        console.log('No userId found in URL');
+        return;
+      }
+
+      const token =
+        localStorage.getItem('token') ||
+        sessionStorage.getItem('token') ||
+        localStorage.getItem('accessToken') ||
+        sessionStorage.getItem('accessToken') ||
+        localStorage.getItem('jwt') ||
+        sessionStorage.getItem('jwt') ||
+        getCookie('authToken') ||
+        getCookie('token') ||
+        getCookie('accessToken') ||
+        getCookie('jwt');
+
+      console.log('Token search result:', {
+        hasToken: !!token,
+        tokenLength: token?.length,
+        userId,
+        tokenPreview: token ? token.substring(0, 20) + '...' : null,
+      });
+
+      let response;
+
+      if (token) {
+        try {
+          response = await apiClient.get(`/user/${userId}`, {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          });
+        } catch (error) {
+          console.log('JWT request failed, trying without authentication:', error.response?.status);
+          response = await apiClient.get(`/user/${userId}`);
+        }
+      } else {
+        console.log('No token found, trying without authentication');
+        response = await apiClient.get(`/user/${userId}`);
+      }
+      console.log('Doctor data:', response.data);
+
+      const signaturePath = response.data.signatureURL;
+      const signatureUrl = signaturePath
+        ? signaturePath.startsWith('http')
+          ? signaturePath
+          : `${process.env.NEXT_API_BASE_URL}${signaturePath}`
+        : null;
+
+      console.log('Signature URL details:', {
+        originalPath: signaturePath,
+        finalUrl: signatureUrl,
+        hasSignature: !!signatureUrl,
+      });
+
+      setDoctorInfo({
+        name: response.data.fullName || 'Unknown Doctor',
+        signatureUrl: signatureUrl,
+      });
+    } catch (error) {
+      console.error('Error fetching doctor details:', error.response?.data || error.message);
+    } finally {
+      // setIsLoadingDoctor(false);
+      // Show success message or notification
+    }
+  }, []);
+
+  const handleTemplateClick = (template: { id: string; name: string; htmlContent: string }) => {
     console.log('HTML Content:', template.htmlContent);
-    setContent(template.htmlContent);
+    const doctorBlock = buildDoctorBlock();
+    const composed = `${template.htmlContent || ''}${doctorBlock}`;
+    setContent(composed);
     setTemplateName(template.name);
   };
 
@@ -92,8 +194,6 @@ export default function ReportGenerationModal({
 
   const handleCloseDictation = () => {
     setIsDictationMode(false);
-    setIsRecording(false);
-    setIsPaused(false);
     setDictationText('');
   };
 
@@ -188,15 +288,32 @@ export default function ReportGenerationModal({
         setContent(generated);
       }
       handleCloseDictation();
-    } catch (error: any) {
-      console.error('AI analysis failed:', error?.response?.data || error?.message || error);
+    } catch (error: unknown) {
+      const err = error as { response?: { data?: unknown }; message?: string };
+      console.error('AI analysis failed:', err.response?.data ?? err.message ?? error);
     } finally {
       setIsAnalyzing(false);
     }
   };
 
+  const buildDoctorBlock = () => {
+    const name = doctorInfo?.name || '-';
+    const signature = doctorInfo?.signatureUrl
+      ? `<img src="${doctorInfo.signatureUrl}" alt="signature" style="width:200px;height:200px;object-fit:contain;margin:0;padding:0;display:block;vertical-align:top;" />`
+      : '<span>Not available</span>';
+    return `
+  <div style="margin-top:24px;border-top:1px solid #444;padding-top:8px">
+    <div><strong>Reporting Doctor:</strong> ${name}</div>
+    <div style="margin:0;padding:0;line-height:1;"><strong>Signature:</strong><span style="margin:0;padding:0;line-height:1;">${signature}</span></div>
+    <div style="height:8px"></div>
+  </div>
+  `;
+  };
+
   const handleSubmitReport = async (htmlContent: string) => {
     const studyInstanceUID = getStudyInstanceUID();
+    const urlParams = new URLSearchParams(window.location.search);
+    const userId = urlParams.get('userId');
 
     if (!htmlContent || htmlContent.trim() === '' || htmlContent === '<p>&nbsp;</p>') {
       console.error('Error: Content is empty or contains only whitespace');
@@ -210,7 +327,12 @@ export default function ReportGenerationModal({
         status: 'submitted',
       });
       console.log('Report submitted successfully:', report.data);
-      hide();
+      if (userId) {
+        const origin = window.location.origin;
+        window.location.href = `${origin}/doctor/${userId}/reports`;
+      } else {
+        hide();
+      }
     } catch (error) {
       console.error('Error submitting report:', error.response?.data || error.message);
     }
@@ -231,7 +353,6 @@ export default function ReportGenerationModal({
         status: 'draft',
       });
       console.log('Draft saved successfully:', draft.data);
-      // Show success message or notification
       alert('Draft saved successfully!');
     } catch (error) {
       console.error('Error saving draft:', error.response?.data || error.message);
@@ -257,9 +378,12 @@ export default function ReportGenerationModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialContent]);
 
+  useEffect(() => {
+    fetchDoctorDetails();
+  }, [fetchDoctorDetails]);
+
   return (
     <div className="container-report flex h-full flex-col p-4">
-      {/* Template Selection Row */}
       <div className="mb-6 flex items-center gap-4">
         <div className="flex-1">
           <DropdownMenu
@@ -269,12 +393,16 @@ export default function ReportGenerationModal({
               if (open) {
                 const modality = await fetchModality();
                 await fetchTemplates(modality);
+                if (!content || content.trim() === '') {
+                  const doctorBlock = buildDoctorBlock();
+                  setContent(doctorBlock);
+                }
               }
             }}
           >
             <DropdownMenuTrigger asChild>
               <button className="bg-background border-input hover:bg-accent text-foreground hover:text-accent-foreground flex w-full items-center justify-between gap-2 rounded border px-4 py-3 text-base transition-colors">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center">
                   <span>{templateName || 'Select Template'}</span>
                 </div>
                 <Icons.ChevronDown className="h-4 w-4" />
@@ -326,11 +454,9 @@ export default function ReportGenerationModal({
         )}
       </div>
 
-      {/* Main Content Area */}
       <div className="h-full min-h-0 flex-1">
         {isDictationMode ? (
           <div className="flex h-full gap-4">
-            {/* Left Panel - Report Template */}
             <div className="flex-1">
               <TinyMCEEditor
                 content={content}
@@ -339,16 +465,11 @@ export default function ReportGenerationModal({
               />
             </div>
 
-            {/* Right Panel - Dictation */}
             <div className="w-1/2">
               <DictationPanel
-                isRecording={isRecording}
-                isPaused={isPaused}
-                dictationText={dictationText}
-                onStart={handleStartRecording}
-                onPause={handlePauseRecording}
-                onStop={handleStopRecording}
+                onDictationTextChange={setDictationText}
                 onSubmit={handleSubmitDictation}
+                wsUrl={WS_URL}
                 isAnalyzing={isAnalyzing}
               />
             </div>
@@ -374,7 +495,7 @@ function TinyMCEEditor({
   onSubmit: (htmlContent: string) => void;
   onSaveAsDraft: (htmlContent: string) => void;
 }) {
-  const editorRef = useRef<any>(null);
+  const editorRef = useRef<{ getContent: () => string } | null>(null);
   const [hasContent, setHasContent] = useState(false);
 
   // Update hasContent when content prop changes
@@ -385,6 +506,18 @@ function TinyMCEEditor({
       setHasContent(false);
     }
   }, [content]);
+  const [initialValue, setInitialValue] = useState(content);
+
+  useEffect(() => {
+    const editorInstance = editorRef.current as unknown as {
+      setContent?: (v: string) => void;
+    } | null;
+    if (editorInstance?.setContent) {
+      editorInstance.setContent(content || '');
+      return;
+    }
+    setInitialValue(content);
+  }, [content]);
 
   return (
     <div className="flex h-full flex-col">
@@ -393,7 +526,7 @@ function TinyMCEEditor({
           <Editor
             apiKey="b0ggc7dfi30js013j5ardxxnumm26dhq5duxeqb15qt369l5"
             onInit={(_evt, editor) => (editorRef.current = editor)}
-            initialValue={content}
+            initialValue={initialValue}
             init={{
               height: '100%',
               min_height: 600,
@@ -464,7 +597,6 @@ function TinyMCEEditor({
               statusbar: false,
               setup: editor => {
                 editor.on('init', () => {
-                  // Force dark mode after initialization
                   const iframe = editor.getContainer().querySelector('iframe');
                   if (iframe && iframe.contentDocument) {
                     const style = iframe.contentDocument.createElement('style');
@@ -483,7 +615,6 @@ function TinyMCEEditor({
                     iframe.contentDocument.head.appendChild(style);
                   }
 
-                  // Additional dark mode enforcement
                   setTimeout(() => {
                     const container = editor.getContainer();
                     if (container) {
@@ -551,60 +682,211 @@ function TinyMCEEditor({
 }
 
 function DictationPanel({
-  isRecording,
-  isPaused,
-  dictationText,
-  onStart,
-  onPause,
-  onStop,
+  onDictationTextChange,
   onSubmit,
   isAnalyzing,
+  wsUrl,
 }: {
-  isRecording: boolean;
-  isPaused: boolean;
-  dictationText: string;
-  onStart: () => void;
-  onPause: () => void;
-  onStop: () => void;
+  onDictationTextChange: (text: string) => void;
   onSubmit: () => void;
+  wsUrl: string;
   isAnalyzing?: boolean;
 }) {
+  const [isRecording, setIsRecording] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
+  const [dictationText, setDictationText] = useState('');
+
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
+  const processorRef = useRef<ScriptProcessorNode | null>(null);
+  const websocketRef = useRef<WebSocket | null>(null);
+  const shouldProcessAudioRef = useRef<boolean>(false);
+
+  const cleanupAudioResources = () => {
+    if (audioContextRef.current) {
+      audioContextRef.current.close();
+      audioContextRef.current = null;
+    }
+
+    if (mediaStreamRef.current) {
+      mediaStreamRef.current.getTracks().forEach(track => track.stop());
+      mediaStreamRef.current = null;
+    }
+
+    if (processorRef.current) {
+      processorRef.current.disconnect();
+      processorRef.current = null;
+    }
+
+    if (websocketRef.current) {
+      websocketRef.current.close();
+      websocketRef.current = null;
+    }
+  };
+
+  const handleStartRecording = async () => {
+    try {
+      const ws = new WebSocket(wsUrl || '');
+      websocketRef.current = ws;
+
+      ws.onopen = () => {
+        console.log(' WebSocket connected successfully');
+      };
+
+      ws.onmessage = event => {
+        console.log('Received message from backend:', event.data);
+        try {
+          const response = JSON.parse(event.data);
+          console.log('Parsed transcription response:', response);
+
+          if (response.text) {
+            setDictationText(prev => {
+              const newText = prev + ' ' + response.text;
+              onDictationTextChange(newText);
+              return newText;
+            });
+          }
+        } catch (e) {
+          console.log(' Received plain text:', event.data);
+          setDictationText(prev => {
+            const newText = prev + ' ' + event.data;
+            onDictationTextChange(newText);
+            return newText;
+          });
+        }
+      };
+
+      ws.onerror = error => {
+        console.error(' WebSocket error:', error);
+      };
+
+      ws.onclose = event => {
+        console.log(' WebSocket disconnected:', event.code, event.reason);
+      };
+
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: { sampleRate: 16000, channelCount: 1 },
+      });
+      mediaStreamRef.current = stream;
+
+      const audioCtx = new (window.AudioContext ||
+        (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)({
+        sampleRate: 16000,
+      });
+      audioContextRef.current = audioCtx;
+      console.log(' AudioContext created with sample rate:', audioCtx.sampleRate);
+
+      const source = audioCtx.createMediaStreamSource(stream);
+      const processor = audioCtx.createScriptProcessor(4096, 1, 1);
+      processorRef.current = processor;
+
+      let audioChunkCount = 0;
+
+      processor.onaudioprocess = event => {
+        if (
+          shouldProcessAudioRef.current &&
+          websocketRef.current &&
+          websocketRef.current.readyState === WebSocket.OPEN
+        ) {
+          const inputData = event.inputBuffer.getChannelData(0);
+          const pcmData = new Int16Array(inputData.length);
+
+          for (let i = 0; i < inputData.length; i++) {
+            pcmData[i] = Math.max(-32768, Math.min(32767, inputData[i] * 32768));
+          }
+
+          audioChunkCount++;
+          console.log(`Sending audio chunk #${audioChunkCount} to backend:`, {
+            samples: pcmData.length,
+            bytes: pcmData.buffer.byteLength,
+            websocketState: websocketRef.current.readyState,
+          });
+
+          try {
+            websocketRef.current.send(pcmData.buffer);
+          } catch (error) {
+            console.error(' Error sending audio data:', error);
+          }
+        }
+      };
+
+      source.connect(processor);
+      processor.connect(audioCtx.destination);
+
+      setIsRecording(true);
+      setIsPaused(false);
+      setDictationText('');
+      onDictationTextChange('');
+      shouldProcessAudioRef.current = true;
+    } catch (error) {
+      console.error('Failed to start recording:', error);
+    }
+  };
+
+  const handlePauseRecording = () => {
+    if (!isRecording) {
+      return;
+    }
+    setIsPaused(prev => {
+      const newPausedState = !prev;
+      console.log(newPausedState ? ' Recording paused' : 'Recording resumed');
+      return newPausedState;
+    });
+  };
+
+  const handleStopRecording = () => {
+    setIsRecording(false);
+    setIsPaused(false);
+    shouldProcessAudioRef.current = false;
+    cleanupAudioResources();
+  };
+
+  const handleSubmit = () => {
+    onSubmit();
+    setDictationText('');
+    onDictationTextChange('');
+  };
+
+  useEffect(() => {
+    return () => {
+      cleanupAudioResources();
+    };
+  }, []);
+
   return (
     <Card className="h-full">
       <CardHeader className="pb-3">
         <CardTitle className="text-lg font-semibold">Dictation</CardTitle>
       </CardHeader>
       <CardContent className="flex h-full flex-col space-y-4">
-        {/* Instructions */}
         <div className="muted-foreground space-y-1 text-sm">
           <p>Dictate clinical findings and describe what you observe.</p>
           <p>Voice punctuation: say &quot;period&quot;, &quot;comma&quot;, etc...</p>
         </div>
 
-        {/* Control Buttons */}
         <div className="flex gap-2">
           <Button
             variant={isRecording && !isPaused ? 'default' : 'secondary'}
             size="sm"
-            onClick={onStart}
+            onClick={handleStartRecording}
             disabled={isRecording && !isPaused}
             className="flex-1"
           >
-            Start
+            {isRecording && !isPaused ? 'Recording...' : 'Start'}
           </Button>
           <Button
             variant={isPaused ? 'default' : 'secondary'}
             size="sm"
-            onClick={onPause}
-            disabled={!isRecording || isPaused}
+            onClick={handlePauseRecording}
+            disabled={!isRecording}
             className="flex-1"
           >
-            Pause
+            {isPaused ? 'Resume' : 'Pause'}
           </Button>
           <Button
             variant="secondary"
             size="sm"
-            onClick={onStop}
+            onClick={handleStopRecording}
             disabled={!isRecording}
             className="flex-1"
           >
@@ -612,16 +894,22 @@ function DictationPanel({
           </Button>
         </div>
 
-        {/* Dictation Output Area */}
         <div className="min-h-0 flex-1">
           <div className="h-full overflow-y-auto rounded bg-black p-4 text-white">
-            <p className="muted-foreground text-center">
-              {dictationText || 'Start dictating.....'}
-            </p>
+            {dictationText ? (
+              <p className="whitespace-pre-wrap text-white">{dictationText}</p>
+            ) : (
+              <p className="muted-foreground text-center">
+                {isRecording
+                  ? isPaused
+                    ? 'Recording paused. Click Resume to continue...'
+                    : 'Listening... Speak now.'
+                  : 'Click Start to begin dictation...'}
+              </p>
+            )}
           </div>
         </div>
 
-        {/* Submit Button */}
         <div className="flex justify-end">
           <Button
             variant="default"

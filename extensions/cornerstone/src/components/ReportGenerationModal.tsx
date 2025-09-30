@@ -37,6 +37,13 @@ export default function ReportGenerationModal({
   const [isRecording, setIsRecording] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [dictationText, setDictationText] = useState('');
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const wsRef = useRef<WebSocket | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
+  const WS_URL = process.env.NEXT_API_BASE_URL
+    ? process.env.NEXT_API_BASE_URL.replace(/^http/, 'ws')
+    : '';
 
   const fetchModality = async () => {
     try {
@@ -91,31 +98,101 @@ export default function ReportGenerationModal({
   };
 
   const handleStartRecording = () => {
+    if (isRecording) {
+      return;
+    }
     setIsRecording(true);
     setIsPaused(false);
-    setDictationText('Start dictating.....');
-    // TODO: Implement actual speech recognition
-    console.log('Starting dictation...');
+    setDictationText('');
+    try {
+      const ws = new WebSocket(WS_URL);
+      wsRef.current = ws;
+      ws.onopen = async () => {
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          mediaStreamRef.current = stream;
+          const mr = new MediaRecorder(stream, {
+            mimeType: 'audio/webm;codecs=opus',
+            audioBitsPerSecond: 128000,
+          });
+          mediaRecorderRef.current = mr;
+          mr.ondataavailable = async e => {
+            if (e.data && e.data.size > 0 && ws.readyState === WebSocket.OPEN) {
+              const buf = await e.data.arrayBuffer();
+              ws.send(buf);
+            }
+          };
+          mr.start(250);
+        } catch (err) {
+          console.error('Mic access failed:', err);
+        }
+      };
+      ws.onmessage = evt => {
+        const text = typeof evt.data === 'string' ? evt.data : '';
+        if (text) {
+          setDictationText(prev => (prev ? prev + ' ' : '') + text);
+        }
+      };
+      ws.onerror = err => {
+        console.error('WS error:', err);
+      };
+      ws.onclose = () => {
+        // no-op
+      };
+    } catch (e) {
+      console.error('WS connect failed:', e);
+    }
   };
 
   const handlePauseRecording = () => {
-    setIsPaused(true);
-    // TODO: Implement pause functionality
-    console.log('Pausing dictation...');
+    if (!isRecording || isPaused) {
+      return;
+    }
+    try {
+      mediaRecorderRef.current?.pause();
+      setIsPaused(true);
+    } catch (e) {
+      console.error('Pause failed:', e);
+    }
   };
 
   const handleStopRecording = () => {
-    setIsRecording(false);
-    setIsPaused(false);
-    // TODO: Implement stop functionality
-    console.log('Stopping dictation...');
+    try {
+      mediaRecorderRef.current?.stop();
+      mediaRecorderRef.current = null;
+      mediaStreamRef.current?.getTracks().forEach(t => t.stop());
+      mediaStreamRef.current = null;
+      wsRef.current?.close();
+      wsRef.current = null;
+    } catch (e) {
+      console.error('Stop failed:', e);
+    } finally {
+      setIsRecording(false);
+      setIsPaused(false);
+    }
   };
 
-  const handleSubmitDictation = () => {
-    // TODO: Process dictation text and add to report
-    console.log('Submitting dictation:', dictationText);
-    setContent(prevContent => prevContent + '\n\n' + dictationText);
-    handleCloseDictation();
+  const handleSubmitDictation = async () => {
+    if (!dictationText && !content) {
+      return;
+    }
+    try {
+      setIsAnalyzing(true);
+      const response = await apiClient.post('/google-generative-ai/generate', {
+        dictationText: dictationText,
+        templateContent: content,
+      });
+      const generated =
+        response?.data?.htmlContent ?? response?.data?.content ?? response?.data ?? '';
+      if (typeof generated === 'string' && generated.trim().length > 0) {
+        setContent(generated);
+      }
+      handleCloseDictation();
+    } catch (error: any) {
+      console.error('AI analysis failed:', error?.response?.data || error?.message || error);
+    } finally {
+      setIsAnalyzing(false);
+    }
   };
 
   const handleSubmitReport = async (htmlContent: string) => {
@@ -272,6 +349,7 @@ export default function ReportGenerationModal({
                 onPause={handlePauseRecording}
                 onStop={handleStopRecording}
                 onSubmit={handleSubmitDictation}
+                isAnalyzing={isAnalyzing}
               />
             </div>
           </div>
@@ -480,6 +558,7 @@ function DictationPanel({
   onPause,
   onStop,
   onSubmit,
+  isAnalyzing,
 }: {
   isRecording: boolean;
   isPaused: boolean;
@@ -488,6 +567,7 @@ function DictationPanel({
   onPause: () => void;
   onStop: () => void;
   onSubmit: () => void;
+  isAnalyzing?: boolean;
 }) {
   return (
     <Card className="h-full">
@@ -547,9 +627,14 @@ function DictationPanel({
             variant="default"
             size="sm"
             onClick={onSubmit}
-            disabled={!dictationText || dictationText === 'Start dictating.....'}
+            disabled={isAnalyzing || !dictationText || dictationText === 'Start dictating.....'}
           >
-            Submit
+            <img
+              src="/assets/icons/ai-analysis.svg"
+              alt="AI"
+              className="mr-2 h-4 w-4"
+            />
+            {isAnalyzing ? 'Analyzing...' : 'AI Analysis'}
           </Button>
         </div>
       </CardContent>

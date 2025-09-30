@@ -31,6 +31,7 @@ export default defineConfig({
     },
     define: {
       'process.env.NEXT_API_BASE_URL': JSON.stringify(process.env.NEXT_API_BASE_URL || ''),
+      'process.env.NEXT_WS_BASE_URL': JSON.stringify(process.env.NEXT_WS_BASE_URL || ''),
       'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV),
       'process.env.NODE_DEBUG': JSON.stringify(process.env.NODE_DEBUG),
       'process.env.DEBUG': JSON.stringify(process.env.DEBUG),

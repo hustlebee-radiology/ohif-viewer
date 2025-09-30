@@ -9,11 +9,9 @@ const SRC_DIR = path.resolve(__dirname, './platform/app/src');
 const DIST_DIR = path.resolve(__dirname, './platform/app/dist');
 const PUBLIC_DIR = path.resolve(__dirname, './platform/app/public');
 
-// Environment variables (similar to webpack.pwa.js)
 const APP_CONFIG = process.env.APP_CONFIG || 'config/default.js';
 const PUBLIC_URL = process.env.PUBLIC_URL || '/';
 
-// Add these constants
 const NODE_ENV = process.env.NODE_ENV;
 const BUILD_NUM = process.env.CIRCLE_BUILD_NUM || '0';
 const VERSION_NUMBER = fs.readFileSync(path.join(__dirname, './version.txt'), 'utf8') || '';
@@ -22,8 +20,6 @@ const PROXY_TARGET = process.env.PROXY_TARGET;
 const PROXY_DOMAIN = process.env.PROXY_DOMAIN;
 const PROXY_PATH_REWRITE_FROM = process.env.PROXY_PATH_REWRITE_FROM;
 const PROXY_PATH_REWRITE_TO = process.env.PROXY_PATH_REWRITE_TO;
-
-// Add port constant
 
 const OHIF_PORT = Number(process.env.OHIF_PORT || 3005);
 const OHIF_OPEN = process.env.OHIF_OPEN !== 'false';

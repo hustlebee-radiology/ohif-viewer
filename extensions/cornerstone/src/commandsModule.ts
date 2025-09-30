@@ -28,6 +28,8 @@ import {
   callInputDialog,
 } from '@ohif/extension-default';
 import { vec3, mat4 } from 'gl-matrix';
+import axios from 'axios';
+import apiClient from '../../../platform/app/src/utils/apiClient';
 import toggleImageSliceSync from './utils/imageSliceSync/toggleImageSliceSync';
 import { getFirstAnnotationSelected } from './utils/measurementServiceMappings/utils/selection';
 import { getViewportEnabledElement } from './utils/getViewportEnabledElement';
@@ -55,7 +57,6 @@ const getLabelmapTools = ({ toolGroupService }) => {
   toolGroupIds.forEach(toolGroupId => {
     const toolGroup = cornerstoneTools.ToolGroupManager.getToolGroup(toolGroupId);
     const tools = toolGroup.getToolInstances();
-    // tools is an object with toolName as the key and tool as the value
     Object.keys(tools).forEach(toolName => {
       const tool = tools[toolName];
       if (
@@ -151,8 +152,6 @@ function commandsModule({
       const { metadata } = measurement;
 
       const activeViewportId = viewportGridService.getActiveViewportId();
-      // Finds the best viewport to jump to for showing the annotation view reference
-      // This may be different from active if there is a viewport already showing the display set.
       const viewportId = cornerstoneViewportService.findNavigationCompatibleViewportId(
         activeViewportId,
         metadata
@@ -170,9 +169,6 @@ function commandsModule({
         return;
       }
 
-      // Finds the viewport to update to show the given displayset/orientation.
-      // This will choose a view already containing the measurement display set
-      // if possible, otherwise will fallback to the active.
       const viewportToUpdate = cornerstoneViewportService.findUpdateableViewportConfiguration(
         activeViewportId,
         measurement
@@ -197,7 +193,6 @@ function commandsModule({
 
       updatedViewports[0].viewportOptions = viewportToUpdate.viewportOptions;
 
-      // Update stored position presentation
       commandsManager.run('updateStoredPositionPresentation', {
         viewportId: viewportToUpdate.viewportId,
         displaySetInstanceUIDs: [referencedDisplaySetInstanceUID],
@@ -216,9 +211,6 @@ function commandsModule({
       }
 
       if (displaySet.isOverlayDisplaySet) {
-        // update the previously stored segmentationPresentation with the new viewportId
-        // presentation so that when we put the referencedDisplaySet back in the viewport
-        // it will have the correct segmentation representation hydrated
         commandsManager.runCommand('updateStoredSegmentationPresentation', {
           displaySet,
           type:
@@ -2204,9 +2196,88 @@ function commandsModule({
     },
   };
 
+  (function autoOpenReportIfReportIdPresent() {
+    try {
+      const p = new URLSearchParams(window.location.search);
+      const reportId = p.get('reportId');
+      const userId = p.get('userId');
+      if (!reportId) {
+        return;
+      }
+
+      const token =
+        localStorage.getItem('accessToken') ||
+        localStorage.getItem('token') ||
+        sessionStorage.getItem('accessToken') ||
+        sessionStorage.getItem('token') ||
+        (document.cookie.match(/(?:^|; )(?:authToken|accessToken|token|jwt)=([^;]*)/) || [])[1];
+
+      const headers = token ? { Authorization: `Bearer ${decodeURIComponent(token)}` } : undefined;
+      const cfg = { headers, withCredentials: true } as const;
+
+      const reportReq = apiClient.get('/report', cfg as any);
+      const userReq = userId
+        ? apiClient.get(`/user/${userId}`, cfg as any).catch(err => {
+            if (err?.response?.status === 401) {
+              return apiClient.get(`/user/${userId}`, { withCredentials: true } as any);
+            }
+            throw err;
+          })
+        : Promise.resolve(null);
+
+      Promise.allSettled([reportReq, userReq])
+        .then(async ([rRes, uRes]) => {
+          if (rRes.status !== 'fulfilled') {
+            throw rRes.reason;
+          }
+          const reports = Array.isArray(rRes.value?.data) ? rRes.value.data : [];
+          const reportIdStr = String(reportId);
+          const matched = reports.find((r: any) => {
+            const candidates = [r?.id, r?.reportId, r?.uuid, r?._id];
+            return candidates.some(v => v != null && String(v) === reportIdStr);
+          });
+          const initialContent = matched?.htmlContent ?? '';
+          if (!matched) {
+            // eslint-disable-next-line no-console
+            console.warn('Auto-open: report not found in list; opening empty editor', {
+              reportId,
+              receivedCount: reports.length,
+            });
+          }
+          const doctorInfo =
+            uRes && uRes.status === 'fulfilled' && (uRes as any).value?.data
+              ? {
+                  fullName: (uRes as any).value.data.fullName,
+                  signatureURL: (uRes as any).value.data.signatureURL,
+                }
+              : null;
+
+          const { UIModalService } = servicesManager.services as any;
+          const { default: ReportGenerationModal } = await import(
+            './components/ReportGenerationModal'
+          );
+
+          UIModalService.show({
+            content: ReportGenerationModal,
+            contentProps: { hide: () => UIModalService.hide(), initialContent, doctorInfo },
+            title: 'Select Templates',
+            containerClassName:
+              'max-w-6xl max-h-[95vh] w-[90vw] h-[90vh] overflow-y-auto scrollbar-thin scrollbar-thumb-primary scrollbar-track-background',
+          });
+        })
+        .catch(err => {
+          console.error('Auto-open by reportId failed:', {
+            status: err?.response?.status,
+            data: err?.response?.data,
+            message: err?.message,
+          });
+        });
+    } catch (e) {
+      console.error('autoOpenReportIfReportIdPresent error:', (e as any)?.message || e);
+    }
+  })();
+
   const definitions = {
-    // The command here is to show the viewer context menu, as being the
-    // context menu
     showCornerstoneContextMenu: {
       commandFn: actions.showCornerstoneContextMenu,
       options: {

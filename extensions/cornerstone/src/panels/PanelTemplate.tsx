@@ -11,7 +11,6 @@ import {
   DropdownMenuTrigger,
   Icons,
 } from '@ohif/ui-next';
-// import { useSystem } from '@ohif/core/src';
 declare global {
   interface Window {
     fetchModality: () => Promise<string | undefined>;
@@ -66,8 +65,6 @@ export default function PanelTemplate() {
     setContent(template.htmlContent);
     setTemplateName(template.name);
   };
-
-  // Removed custom event listener - now handled directly in dropdown onOpenChange
 
   useEffect(() => {
     if (isDropdownOpen && templates.length === 0) {

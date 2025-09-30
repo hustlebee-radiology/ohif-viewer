@@ -65,8 +65,6 @@ export default function PanelTemplate() {
     setTemplateName(template.name);
   };
 
-  // Removed custom event listener - now handled directly in dropdown onOpenChange
-
   useEffect(() => {
     if (isDropdownOpen && templates.length === 0) {
       fetchTemplates();

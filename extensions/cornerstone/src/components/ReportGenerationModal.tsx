@@ -22,9 +22,13 @@ declare global {
 
 interface ReportGenerationModalProps {
   hide: () => void;
+  initialContent?: string;
 }
 
-export default function ReportGenerationModal({ hide }: ReportGenerationModalProps) {
+export default function ReportGenerationModal({
+  hide,
+  initialContent,
+}: ReportGenerationModalProps) {
   const WS_ENV: string | undefined =
     typeof process !== 'undefined'
       ? (process.env?.NEXT_WS_BASE_URL as string | undefined)
@@ -36,7 +40,7 @@ export default function ReportGenerationModal({ hide }: ReportGenerationModalPro
   const [templates, setTemplates] = useState<
     Array<{ id: string; name: string; htmlContent: string }>
   >([]);
-  const [content, setContent] = useState('');
+  const [content, setContent] = useState(initialContent ?? '');
   const [templateName, setTemplateName] = useState('');
   const [isDictationMode, setIsDictationMode] = useState(false);
   const [dictationText, setDictationText] = useState('');
@@ -366,6 +370,13 @@ export default function ReportGenerationModal({ hide }: ReportGenerationModalPro
       fetchTemplates();
     }
   }, [isDropdownOpen, templates.length]);
+
+  useEffect(() => {
+    if (typeof initialContent === 'string' && initialContent !== content) {
+      setContent(initialContent);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialContent]);
 
   useEffect(() => {
     fetchDoctorDetails();

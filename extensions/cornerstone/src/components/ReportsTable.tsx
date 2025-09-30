@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import apiClient from '../../../../platform/app/src/utils/apiClient';
 import { Button, Card, CardHeader, CardTitle, CardContent } from '@ohif/ui-next';
 
 interface Report {
@@ -23,7 +23,7 @@ export default function ReportsTable({ onReportSelect }: ReportsTableProps) {
   const fetchReports = async () => {
     try {
       setLoading(true);
-      const response = await axios.get('http://localhost:4000/report');
+      const response = await apiClient.get('/report');
       setReports(response.data || []);
       setError(null);
     } catch (error) {

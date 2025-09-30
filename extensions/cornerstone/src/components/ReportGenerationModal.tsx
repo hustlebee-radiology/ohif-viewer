@@ -1,6 +1,6 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { Editor } from '@tinymce/tinymce-react';
-import axios from 'axios';
+import apiClient from '../../../../platform/app/src/utils/apiClient';
 import {
   Button,
   DropdownMenu,
@@ -48,8 +48,8 @@ export default function ReportGenerationModal({
         return undefined;
       }
 
-      const response = await axios.get(
-        `http://localhost:4000/dicom/study-by-study-instance-uuid/${studyInstanceUuid}`
+      const response = await apiClient.get(
+        `/dicom/study-by-study-instance-uuid/${studyInstanceUuid}`
       );
       console.log('Study data:', response.data);
       const studyData = response.data;
@@ -64,7 +64,7 @@ export default function ReportGenerationModal({
 
   const fetchTemplates = async (modality?: string) => {
     try {
-      const response = await axios.get('http://localhost:4000/template', {
+      const response = await apiClient.get('/template', {
         params: modality ? { modality } : undefined,
       });
       setTemplates(response.data);
@@ -127,7 +127,7 @@ export default function ReportGenerationModal({
     }
 
     try {
-      const report = await axios.post('http://localhost:4000/report', {
+      const report = await apiClient.post('/report', {
         studyInstanceUID: studyInstanceUID,
         htmlContent: htmlContent,
         status: 'submitted',
@@ -148,7 +148,7 @@ export default function ReportGenerationModal({
     }
 
     try {
-      const draft = await axios.post('http://localhost:4000/report', {
+      const draft = await apiClient.post('/report', {
         studyInstanceUID: studyInstanceUID,
         htmlContent: htmlContent,
         status: 'draft',

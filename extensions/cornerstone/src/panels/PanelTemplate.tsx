@@ -1,7 +1,7 @@
 // extensions/cornerstone/src/panels/PanelTemplate.tsx
 import React, { useRef, useEffect, useState } from 'react';
 import { Editor } from '@tinymce/tinymce-react';
-import axios from 'axios';
+import apiClient from '../../../../platform/app/src/utils/apiClient';
 
 // import './App.css';
 import {
@@ -11,7 +11,6 @@ import {
   DropdownMenuTrigger,
   Icons,
 } from '@ohif/ui-next';
-// import { useSystem } from '@ohif/core/src';
 declare global {
   interface Window {
     fetchModality: () => Promise<string | undefined>;
@@ -34,8 +33,8 @@ export default function PanelTemplate() {
         return undefined;
       }
 
-      const response = await axios.get(
-        `http://localhost:4000/dicom/study-by-study-instance-uuid/${studyInstanceUuid}`
+      const response = await apiClient.get(
+        `/dicom/study-by-study-instance-uuid/${studyInstanceUuid}`
       );
       console.log('Study data:', response.data);
       const studyData = response.data;
@@ -52,7 +51,7 @@ export default function PanelTemplate() {
   // Fetch templates (unfiltered)
   const fetchTemplates = async (modality?: string) => {
     try {
-      const response = await axios.get('http://localhost:4000/template', {
+      const response = await apiClient.get('/template', {
         params: modality ? { modality } : undefined,
       });
       setTemplates(response.data);
@@ -66,8 +65,6 @@ export default function PanelTemplate() {
     setContent(template.htmlContent);
     setTemplateName(template.name);
   };
-
-  // Removed custom event listener - now handled directly in dropdown onOpenChange
 
   useEffect(() => {
     if (isDropdownOpen && templates.length === 0) {
@@ -160,7 +157,7 @@ function TinyMCEEditor({ content }: { content: string }) {
     }
 
     try {
-      const report = await axios.post('http://localhost:4000/report', {
+      const report = await apiClient.post('/report', {
         studyInstanceUID: studyInstanceUID,
         htmlContent: htmlContent, // Changed from 'content' to 'htmlContent' to match server expectation
         status: 'submitted',
@@ -176,7 +173,7 @@ function TinyMCEEditor({ content }: { content: string }) {
   // Function to fetch all reports
   const refreshReports = async () => {
     try {
-      const response = await axios.get('http://localhost:4000/report');
+      const response = await apiClient.get('/report');
       console.log('Reports refreshed:', response.data);
     } catch (error) {
       console.error('Error refreshing reports:', error.response?.data || error.message);
@@ -234,8 +231,8 @@ function TinyMCEEditor({ content }: { content: string }) {
               for (const uid of studyInstanceUIDs) {
                 try {
                   console.log('Validating study exists for UID:', uid);
-                  await axios.get(
-                    `http://localhost:4000/dicom/study-by-study-instance-uuid/${encodeURIComponent(uid)}`
+                  await apiClient.get(
+                    `/dicom/study-by-study-instance-uuid/${encodeURIComponent(uid)}`
                   );
                 } catch (e) {
                   console.error(

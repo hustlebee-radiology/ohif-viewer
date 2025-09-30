@@ -1,6 +1,6 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { Editor } from '@tinymce/tinymce-react';
-import axios from 'axios';
+import apiClient from '../../../../platform/app/src/utils/apiClient';
 import {
   Button,
   DropdownMenu,
@@ -37,9 +37,9 @@ export default function ReportGenerationModal({ hide }: ReportGenerationModalPro
   const wsRef = useRef<WebSocket | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
-  const API_BASE = (typeof process !== 'undefined' &&
-    (process as any)?.env?.NEXT_API_BASE_URL) as string;
-  const WS_URL = API_BASE.replace(/^http/, 'ws');
+  const WS_URL = process.env.NEXT_API_BASE_URL
+    ? process.env.NEXT_API_BASE_URL.replace(/^http/, 'ws')
+    : '';
 
   const fetchModality = async () => {
     try {
@@ -51,8 +51,8 @@ export default function ReportGenerationModal({ hide }: ReportGenerationModalPro
         return undefined;
       }
 
-      const response = await axios.get(
-        `${API_BASE}/dicom/study-by-study-instance-uuid/${studyInstanceUuid}`
+      const response = await apiClient.get(
+        `/dicom/study-by-study-instance-uuid/${studyInstanceUuid}`
       );
       console.log('Study data:', response.data);
       const studyData = response.data;
@@ -67,7 +67,7 @@ export default function ReportGenerationModal({ hide }: ReportGenerationModalPro
 
   const fetchTemplates = async (modality?: string) => {
     try {
-      const response = await axios.get(`${API_BASE}/template`, {
+      const response = await apiClient.get('/template', {
         params: modality ? { modality } : undefined,
       });
       setTemplates(response.data);
@@ -174,7 +174,7 @@ export default function ReportGenerationModal({ hide }: ReportGenerationModalPro
     }
     try {
       setIsAnalyzing(true);
-      const response = await axios.post(`${API_BASE}/google-generative-ai/generate`, {
+      const response = await apiClient.post('/google-generative-ai/generate', {
         dictationText: dictationText,
         templateContent: content,
       });
@@ -200,7 +200,7 @@ export default function ReportGenerationModal({ hide }: ReportGenerationModalPro
     }
 
     try {
-      const report = await axios.post(`${API_BASE}/report`, {
+      const report = await apiClient.post('/report', {
         studyInstanceUID: studyInstanceUID,
         htmlContent: htmlContent,
       });

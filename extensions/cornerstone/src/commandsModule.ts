@@ -29,6 +29,7 @@ import {
 } from '@ohif/extension-default';
 import { vec3, mat4 } from 'gl-matrix';
 import axios from 'axios';
+import apiClient from '../../../platform/app/src/utils/apiClient';
 import toggleImageSliceSync from './utils/imageSliceSync/toggleImageSliceSync';
 import { getFirstAnnotationSelected } from './utils/measurementServiceMappings/utils/selection';
 import { getViewportEnabledElement } from './utils/getViewportEnabledElement';
@@ -56,7 +57,6 @@ const getLabelmapTools = ({ toolGroupService }) => {
   toolGroupIds.forEach(toolGroupId => {
     const toolGroup = cornerstoneTools.ToolGroupManager.getToolGroup(toolGroupId);
     const tools = toolGroup.getToolInstances();
-    // tools is an object with toolName as the key and tool as the value
     Object.keys(tools).forEach(toolName => {
       const tool = tools[toolName];
       if (
@@ -152,8 +152,6 @@ function commandsModule({
       const { metadata } = measurement;
 
       const activeViewportId = viewportGridService.getActiveViewportId();
-      // Finds the best viewport to jump to for showing the annotation view reference
-      // This may be different from active if there is a viewport already showing the display set.
       const viewportId = cornerstoneViewportService.findNavigationCompatibleViewportId(
         activeViewportId,
         metadata
@@ -171,9 +169,6 @@ function commandsModule({
         return;
       }
 
-      // Finds the viewport to update to show the given displayset/orientation.
-      // This will choose a view already containing the measurement display set
-      // if possible, otherwise will fallback to the active.
       const viewportToUpdate = cornerstoneViewportService.findUpdateableViewportConfiguration(
         activeViewportId,
         measurement
@@ -198,7 +193,6 @@ function commandsModule({
 
       updatedViewports[0].viewportOptions = viewportToUpdate.viewportOptions;
 
-      // Update stored position presentation
       commandsManager.run('updateStoredPositionPresentation', {
         viewportId: viewportToUpdate.viewportId,
         displaySetInstanceUIDs: [referencedDisplaySetInstanceUID],
@@ -217,9 +211,6 @@ function commandsModule({
       }
 
       if (displaySet.isOverlayDisplaySet) {
-        // update the previously stored segmentationPresentation with the new viewportId
-        // presentation so that when we put the referencedDisplaySet back in the viewport
-        // it will have the correct segmentation representation hydrated
         commandsManager.runCommand('updateStoredSegmentationPresentation', {
           displaySet,
           type:
@@ -2224,12 +2215,11 @@ function commandsModule({
       const headers = token ? { Authorization: `Bearer ${decodeURIComponent(token)}` } : undefined;
       const cfg = { headers, withCredentials: true } as const;
 
-      // Use listing endpoint (no doctorId) and filter client-side by reportId
-      const reportReq = axios.get('http://localhost:4000/report', cfg);
+      const reportReq = apiClient.get('/report', cfg as any);
       const userReq = userId
-        ? axios.get(`http://localhost:4000/user/${userId}`, cfg).catch(err => {
+        ? apiClient.get(`/user/${userId}`, cfg as any).catch(err => {
             if (err?.response?.status === 401) {
-              return axios.get(`http://localhost:4000/user/${userId}`, { withCredentials: true });
+              return apiClient.get(`/user/${userId}`, { withCredentials: true } as any);
             }
             throw err;
           })
@@ -2288,8 +2278,6 @@ function commandsModule({
   })();
 
   const definitions = {
-    // The command here is to show the viewer context menu, as being the
-    // context menu
     showCornerstoneContextMenu: {
       commandFn: actions.showCornerstoneContextMenu,
       options: {

@@ -38,14 +38,18 @@ export default function ReportGenerationModal({ hide }: ReportGenerationModalPro
   const [templateName, setTemplateName] = useState('');
   const [isDictationMode, setIsDictationMode] = useState(false);
   const [dictationText, setDictationText] = useState('');
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const wsRef = useRef<WebSocket | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
+  const WS_URL = process.env.NEXT_API_BASE_URL
+    ? process.env.NEXT_API_BASE_URL.replace(/^http/, 'ws')
+    : '';
 
-  // Doctor information state
   const [doctorInfo, setDoctorInfo] = useState<{
     name: string;
     signatureUrl: string;
   } | null>(null);
-  // Loading state retained for future use; currently not shown in UI
-  // const [isLoadingDoctor, setIsLoadingDoctor] = useState(false);
 
   const fetchModality = async () => {
     try {
@@ -187,10 +191,102 @@ export default function ReportGenerationModal({ hide }: ReportGenerationModalPro
     setDictationText('');
   };
 
-  const handleSubmitDictation = () => {
-    console.log('Submitting dictation:', dictationText);
-    setContent(prevContent => prevContent + '\n\n' + dictationText);
-    handleCloseDictation();
+  const handleStartRecording = () => {
+    if (isRecording) {
+      return;
+    }
+    setIsRecording(true);
+    setIsPaused(false);
+    setDictationText('');
+    try {
+      const ws = new WebSocket(WS_URL);
+      wsRef.current = ws;
+      ws.onopen = async () => {
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          mediaStreamRef.current = stream;
+          const mr = new MediaRecorder(stream, {
+            mimeType: 'audio/webm;codecs=opus',
+            audioBitsPerSecond: 128000,
+          });
+          mediaRecorderRef.current = mr;
+          mr.ondataavailable = async e => {
+            if (e.data && e.data.size > 0 && ws.readyState === WebSocket.OPEN) {
+              const buf = await e.data.arrayBuffer();
+              ws.send(buf);
+            }
+          };
+          mr.start(250);
+        } catch (err) {
+          console.error('Mic access failed:', err);
+        }
+      };
+      ws.onmessage = evt => {
+        const text = typeof evt.data === 'string' ? evt.data : '';
+        if (text) {
+          setDictationText(prev => (prev ? prev + ' ' : '') + text);
+        }
+      };
+      ws.onerror = err => {
+        console.error('WS error:', err);
+      };
+      ws.onclose = () => {
+        // no-op
+      };
+    } catch (e) {
+      console.error('WS connect failed:', e);
+    }
+  };
+
+  const handlePauseRecording = () => {
+    if (!isRecording || isPaused) {
+      return;
+    }
+    try {
+      mediaRecorderRef.current?.pause();
+      setIsPaused(true);
+    } catch (e) {
+      console.error('Pause failed:', e);
+    }
+  };
+
+  const handleStopRecording = () => {
+    try {
+      mediaRecorderRef.current?.stop();
+      mediaRecorderRef.current = null;
+      mediaStreamRef.current?.getTracks().forEach(t => t.stop());
+      mediaStreamRef.current = null;
+      wsRef.current?.close();
+      wsRef.current = null;
+    } catch (e) {
+      console.error('Stop failed:', e);
+    } finally {
+      setIsRecording(false);
+      setIsPaused(false);
+    }
+  };
+
+  const handleSubmitDictation = async () => {
+    if (!dictationText && !content) {
+      return;
+    }
+    try {
+      setIsAnalyzing(true);
+      const response = await apiClient.post('/google-generative-ai/generate', {
+        dictationText: dictationText,
+        templateContent: content,
+      });
+      const generated =
+        response?.data?.htmlContent ?? response?.data?.content ?? response?.data ?? '';
+      if (typeof generated === 'string' && generated.trim().length > 0) {
+        setContent(generated);
+      }
+      handleCloseDictation();
+    } catch (error: any) {
+      console.error('AI analysis failed:', error?.response?.data || error?.message || error);
+    } finally {
+      setIsAnalyzing(false);
+    }
   };
 
   const buildDoctorBlock = () => {
@@ -232,6 +328,29 @@ export default function ReportGenerationModal({ hide }: ReportGenerationModalPro
       }
     } catch (error) {
       console.error('Error submitting report:', error.response?.data || error.message);
+    }
+  };
+
+  const handleSaveAsDraft = async (htmlContent: string) => {
+    const studyInstanceUID = getStudyInstanceUID();
+
+    if (!htmlContent || htmlContent.trim() === '' || htmlContent === '<p>&nbsp;</p>') {
+      console.error('Error: Content is empty or contains only whitespace');
+      return;
+    }
+
+    try {
+      const draft = await apiClient.post('/report', {
+        studyInstanceUID: studyInstanceUID,
+        htmlContent: htmlContent,
+        status: 'draft',
+      });
+      console.log('Draft saved successfully:', draft.data);
+      // Show success message or notification
+      alert('Draft saved successfully!');
+    } catch (error) {
+      console.error('Error saving draft:', error.response?.data || error.message);
+      alert('Error saving draft. Please try again.');
     }
   };
 
@@ -330,6 +449,7 @@ export default function ReportGenerationModal({ hide }: ReportGenerationModalPro
               <TinyMCEEditor
                 content={content}
                 onSubmit={handleSubmitReport}
+                onSaveAsDraft={handleSaveAsDraft}
               />
             </div>
 
@@ -338,6 +458,7 @@ export default function ReportGenerationModal({ hide }: ReportGenerationModalPro
                 onDictationTextChange={setDictationText}
                 onSubmit={handleSubmitDictation}
                 wsUrl={WS_URL}
+                isAnalyzing={isAnalyzing}
               />
             </div>
           </div>
@@ -345,6 +466,7 @@ export default function ReportGenerationModal({ hide }: ReportGenerationModalPro
           <TinyMCEEditor
             content={content}
             onSubmit={handleSubmitReport}
+            onSaveAsDraft={handleSaveAsDraft}
           />
         )}
       </div>
@@ -355,11 +477,23 @@ export default function ReportGenerationModal({ hide }: ReportGenerationModalPro
 function TinyMCEEditor({
   content,
   onSubmit,
+  onSaveAsDraft,
 }: {
   content: string;
   onSubmit: (htmlContent: string) => void;
+  onSaveAsDraft: (htmlContent: string) => void;
 }) {
   const editorRef = useRef<{ getContent: () => string } | null>(null);
+  const [hasContent, setHasContent] = useState(false);
+
+  // Update hasContent when content prop changes
+  useEffect(() => {
+    if (content && content.trim() !== '' && content !== '<p>&nbsp;</p>') {
+      setHasContent(true);
+    } else {
+      setHasContent(false);
+    }
+  }, [content]);
   const [initialValue, setInitialValue] = useState(content);
 
   useEffect(() => {
@@ -479,6 +613,24 @@ function TinyMCEEditor({
                       }
                     }
                   }, 100);
+
+                  // Check initial content
+                  const initialContent = editor.getContent();
+                  setHasContent(
+                    initialContent &&
+                      initialContent.trim() !== '' &&
+                      initialContent !== '<p>&nbsp;</p>'
+                  );
+                });
+
+                // Listen for content changes
+                editor.on('input change keyup', () => {
+                  const currentContent = editor.getContent();
+                  const hasValidContent =
+                    currentContent &&
+                    currentContent.trim() !== '' &&
+                    currentContent !== '<p>&nbsp;</p>';
+                  setHasContent(hasValidContent);
                 });
               },
             }}
@@ -486,15 +638,29 @@ function TinyMCEEditor({
         </div>
       </div>
 
-      <div className="mt-6 flex justify-center">
+      {/* Action Buttons */}
+      <div className="mt-6 flex justify-center gap-4">
+        <Button
+          variant="outline"
+          size="lg"
+          disabled={!hasContent}
+          onClick={() => {
+            const htmlContent = editorRef.current?.getContent();
+            onSaveAsDraft(htmlContent);
+          }}
+          className="min-w-[140px] px-8 py-3 text-lg"
+        >
+          Save as Draft
+        </Button>
         <Button
           variant="default"
           size="lg"
+          disabled={!hasContent}
           onClick={() => {
             const htmlContent = editorRef.current?.getContent();
             onSubmit(htmlContent);
           }}
-          className="bg-primary text-primary-foreground hover:bg-primary/90 px-12 py-3 text-lg"
+          className="min-w-[160px] px-12 py-3 text-lg"
         >
           Submit Report
         </Button>
@@ -506,11 +672,13 @@ function TinyMCEEditor({
 function DictationPanel({
   onDictationTextChange,
   onSubmit,
+  isAnalyzing,
   wsUrl,
 }: {
   onDictationTextChange: (text: string) => void;
   onSubmit: () => void;
   wsUrl: string;
+  isAnalyzing?: boolean;
 }) {
   const [isRecording, setIsRecording] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
@@ -734,10 +902,15 @@ function DictationPanel({
           <Button
             variant="default"
             size="sm"
-            onClick={handleSubmit}
-            disabled={!dictationText || dictationText.trim() === ''}
+            onClick={onSubmit}
+            disabled={isAnalyzing || !dictationText || dictationText === 'Start dictating.....'}
           >
-            Submit
+            <img
+              src="/assets/icons/ai-analysis.svg"
+              alt="AI"
+              className="mr-2 h-4 w-4"
+            />
+            {isAnalyzing ? 'Analyzing...' : 'AI Analysis'}
           </Button>
         </div>
       </CardContent>

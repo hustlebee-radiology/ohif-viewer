@@ -159,6 +159,7 @@ function TinyMCEEditor({ content }: { content: string }) {
       const report = await apiClient.post('/report', {
         studyInstanceUID: studyInstanceUID,
         htmlContent: htmlContent, // Changed from 'content' to 'htmlContent' to match server expectation
+        status: 'submitted',
       });
       console.log('Report submitted successfully:', report.data);
       await refreshReports();

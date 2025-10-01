@@ -29,13 +29,10 @@ export default function ReportGenerationModal({
   hide,
   initialContent,
 }: ReportGenerationModalProps) {
-  const WS_ENV: string | undefined =
-    typeof process !== 'undefined'
-      ? (process.env?.NEXT_WS_BASE_URL as string | undefined)
-      : undefined;
+  type AppWindow = Window & { config?: { NEXT_API_BASE_URL?: string; NEXT_WS_BASE_URL?: string } };
+  const WS_ENV: string | undefined = (window as AppWindow).config?.NEXT_WS_BASE_URL;
   const WS_URL =
-    WS_ENV ||
-    (process.env.NEXT_API_BASE_URL ? process.env.NEXT_API_BASE_URL.replace(/^http/, 'ws') : '');
+    WS_ENV || ((window as AppWindow).config?.NEXT_API_BASE_URL?.replace(/^http/, 'ws') ?? '');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [templates, setTemplates] = useState<
     Array<{ id: string; name: string; htmlContent: string }>
@@ -61,20 +58,16 @@ export default function ReportGenerationModal({
       const studyInstanceUuid = urlParams.get('StudyInstanceUIDs');
 
       if (!studyInstanceUuid) {
-        console.log('No StudyInstanceUIDs found in URL');
         return undefined;
       }
 
       const response = await apiClient.get(
         `/dicom/study-by-study-instance-uuid/${studyInstanceUuid}`
       );
-      console.log('Study data:', response.data);
       const studyData = response.data;
       const modality = studyData?.patient?.modality;
-      console.log('Modality:', modality);
       return modality;
     } catch (error) {
-      console.error('Error details:', error.response?.data || error.message);
       return undefined;
     }
   };
@@ -85,9 +78,7 @@ export default function ReportGenerationModal({
         params: modality ? { modality } : undefined,
       });
       setTemplates(response.data);
-    } catch (error) {
-      console.error('Error details:', error.response?.data || error.message);
-    }
+    } catch (error) {}
   };
 
   // Helper function to get cookie value
@@ -113,7 +104,6 @@ export default function ReportGenerationModal({
       const userId = urlParams.get('userId');
 
       if (!userId) {
-        console.log('No userId found in URL');
         return;
       }
 
@@ -129,13 +119,6 @@ export default function ReportGenerationModal({
         getCookie('accessToken') ||
         getCookie('jwt');
 
-      console.log('Token search result:', {
-        hasToken: !!token,
-        tokenLength: token?.length,
-        userId,
-        tokenPreview: token ? token.substring(0, 20) + '...' : null,
-      });
-
       let response;
 
       if (token) {
@@ -146,34 +129,24 @@ export default function ReportGenerationModal({
             },
           });
         } catch (error) {
-          console.log('JWT request failed, trying without authentication:', error.response?.status);
           response = await apiClient.get(`/user/${userId}`);
         }
       } else {
-        console.log('No token found, trying without authentication');
         response = await apiClient.get(`/user/${userId}`);
       }
-      console.log('Doctor data:', response.data);
 
       const signaturePath = response.data.signatureURL;
       const signatureUrl = signaturePath
         ? signaturePath.startsWith('http')
           ? signaturePath
-          : `${process.env.NEXT_API_BASE_URL}${signaturePath}`
+          : `${(window as AppWindow).config?.NEXT_API_BASE_URL ?? ''}${signaturePath}`
         : null;
-
-      console.log('Signature URL details:', {
-        originalPath: signaturePath,
-        finalUrl: signatureUrl,
-        hasSignature: !!signatureUrl,
-      });
 
       setDoctorInfo({
         name: response.data.fullName || 'Unknown Doctor',
         signatureUrl: signatureUrl,
       });
     } catch (error) {
-      console.error('Error fetching doctor details:', error.response?.data || error.message);
     } finally {
       // setIsLoadingDoctor(false);
       // Show success message or notification
@@ -181,7 +154,6 @@ export default function ReportGenerationModal({
   }, []);
 
   const handleTemplateClick = (template: { id: string; name: string; htmlContent: string }) => {
-    console.log('HTML Content:', template.htmlContent);
     const doctorBlock = buildDoctorBlock();
     const composed = `${template.htmlContent || ''}${doctorBlock}`;
     setContent(composed);
@@ -223,9 +195,7 @@ export default function ReportGenerationModal({
             }
           };
           mr.start(250);
-        } catch (err) {
-          console.error('Mic access failed:', err);
-        }
+        } catch (err) {}
       };
       ws.onmessage = evt => {
         const text = typeof evt.data === 'string' ? evt.data : '';
@@ -233,15 +203,9 @@ export default function ReportGenerationModal({
           setDictationText(prev => (prev ? prev + ' ' : '') + text);
         }
       };
-      ws.onerror = err => {
-        console.error('WS error:', err);
-      };
-      ws.onclose = () => {
-        // no-op
-      };
-    } catch (e) {
-      console.error('WS connect failed:', e);
-    }
+      ws.onerror = err => {};
+      ws.onclose = () => {};
+    } catch (e) {}
   };
 
   const handlePauseRecording = () => {
@@ -251,9 +215,7 @@ export default function ReportGenerationModal({
     try {
       mediaRecorderRef.current?.pause();
       setIsPaused(true);
-    } catch (e) {
-      console.error('Pause failed:', e);
-    }
+    } catch (e) {}
   };
 
   const handleStopRecording = () => {
@@ -265,7 +227,6 @@ export default function ReportGenerationModal({
       wsRef.current?.close();
       wsRef.current = null;
     } catch (e) {
-      console.error('Stop failed:', e);
     } finally {
       setIsRecording(false);
       setIsPaused(false);
@@ -290,7 +251,6 @@ export default function ReportGenerationModal({
       handleCloseDictation();
     } catch (error: unknown) {
       const err = error as { response?: { data?: unknown }; message?: string };
-      console.error('AI analysis failed:', err.response?.data ?? err.message ?? error);
     } finally {
       setIsAnalyzing(false);
     }
@@ -316,7 +276,6 @@ export default function ReportGenerationModal({
     const userId = urlParams.get('userId');
 
     if (!htmlContent || htmlContent.trim() === '' || htmlContent === '<p>&nbsp;</p>') {
-      console.error('Error: Content is empty or contains only whitespace');
       return;
     }
 
@@ -326,23 +285,19 @@ export default function ReportGenerationModal({
         htmlContent: htmlContent,
         status: 'submitted',
       });
-      console.log('Report submitted successfully:', report.data);
       if (userId) {
         const origin = window.location.origin;
         window.location.href = `${origin}/doctor/${userId}/reports`;
       } else {
         hide();
       }
-    } catch (error) {
-      console.error('Error submitting report:', error.response?.data || error.message);
-    }
+    } catch (error) {}
   };
 
   const handleSaveAsDraft = async (htmlContent: string) => {
     const studyInstanceUID = getStudyInstanceUID();
 
     if (!htmlContent || htmlContent.trim() === '' || htmlContent === '<p>&nbsp;</p>') {
-      console.error('Error: Content is empty or contains only whitespace');
       return;
     }
 
@@ -352,10 +307,8 @@ export default function ReportGenerationModal({
         htmlContent: htmlContent,
         status: 'draft',
       });
-      console.log('Draft saved successfully:', draft.data);
       alert('Draft saved successfully!');
     } catch (error) {
-      console.error('Error saving draft:', error.response?.data || error.message);
       alert('Error saving draft. Please try again.');
     }
   };
@@ -695,61 +648,84 @@ function DictationPanel({
   const [isRecording, setIsRecording] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [dictationText, setDictationText] = useState('');
+  const [connectionStatus, setConnectionStatus] = useState<
+    'disconnected' | 'connecting' | 'connected'
+  >('disconnected');
 
-  const audioContextRef = useRef<AudioContext | null>(null);
+  const wsRef = useRef<WebSocket | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
-  const processorRef = useRef<ScriptProcessorNode | null>(null);
-  const websocketRef = useRef<WebSocket | null>(null);
-  const shouldProcessAudioRef = useRef<boolean>(false);
 
-  const cleanupAudioResources = () => {
-    if (audioContextRef.current) {
-      audioContextRef.current.close();
-      audioContextRef.current = null;
+  const cleanupResources = () => {
+    if (mediaRecorderRef.current) {
+      try {
+        mediaRecorderRef.current.stop();
+      } catch {}
+      mediaRecorderRef.current = null;
     }
-
     if (mediaStreamRef.current) {
       mediaStreamRef.current.getTracks().forEach(track => track.stop());
       mediaStreamRef.current = null;
     }
-
-    if (processorRef.current) {
-      processorRef.current.disconnect();
-      processorRef.current = null;
+    if (wsRef.current) {
+      try {
+        wsRef.current.close();
+      } catch {}
+      wsRef.current = null;
     }
-
-    if (websocketRef.current) {
-      websocketRef.current.close();
-      websocketRef.current = null;
-    }
+    setConnectionStatus('disconnected');
   };
 
   const handleStartRecording = async () => {
     try {
-      const ws = new WebSocket(wsUrl || '');
-      websocketRef.current = ws;
+      setIsRecording(true);
+      setIsPaused(false);
+      setDictationText('');
+      onDictationTextChange('');
+      setConnectionStatus('connecting');
 
-      ws.onopen = () => {
-        console.log(' WebSocket connected successfully');
+      const ws = new WebSocket(wsUrl);
+      wsRef.current = ws;
+      ws.binaryType = 'arraybuffer';
+
+      ws.onopen = async () => {
+        setConnectionStatus('connected');
+
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          mediaStreamRef.current = stream;
+
+          const mimeType = 'audio/webm;codecs=opus';
+          if (!MediaRecorder.isTypeSupported(mimeType)) {
+            throw new Error('Browser does not support audio/webm;codecs=opus');
+          }
+
+          const mediaRecorder = new MediaRecorder(stream, {
+            mimeType,
+            audioBitsPerSecond: 128000,
+          });
+          mediaRecorderRef.current = mediaRecorder;
+
+          mediaRecorder.ondataavailable = async event => {
+            if (event.data && event.data.size > 0 && ws.readyState === WebSocket.OPEN) {
+              try {
+                const arrayBuffer = await event.data.arrayBuffer();
+                ws.send(arrayBuffer);
+              } catch (error) {}
+            }
+          };
+
+          mediaRecorder.start(250);
+        } catch (error) {
+          cleanupResources();
+        }
       };
 
       ws.onmessage = event => {
-        console.log('Received message from backend:', event.data);
-        try {
-          const response = JSON.parse(event.data);
-          console.log('Parsed transcription response:', response);
-
-          if (response.text) {
-            setDictationText(prev => {
-              const newText = prev + ' ' + response.text;
-              onDictationTextChange(newText);
-              return newText;
-            });
-          }
-        } catch (e) {
-          console.log(' Received plain text:', event.data);
+        const transcript = event.data as string;
+        if (transcript && transcript.trim()) {
           setDictationText(prev => {
-            const newText = prev + ' ' + event.data;
+            const newText = prev ? prev + ' ' + transcript : transcript;
             onDictationTextChange(newText);
             return newText;
           });
@@ -757,88 +733,41 @@ function DictationPanel({
       };
 
       ws.onerror = error => {
-        console.error(' WebSocket error:', error);
+        setConnectionStatus('disconnected');
       };
 
-      ws.onclose = event => {
-        console.log(' WebSocket disconnected:', event.code, event.reason);
+      ws.onclose = () => {
+        setConnectionStatus('disconnected');
       };
-
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: { sampleRate: 16000, channelCount: 1 },
-      });
-      mediaStreamRef.current = stream;
-
-      const audioCtx = new (window.AudioContext ||
-        (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)({
-        sampleRate: 16000,
-      });
-      audioContextRef.current = audioCtx;
-      console.log(' AudioContext created with sample rate:', audioCtx.sampleRate);
-
-      const source = audioCtx.createMediaStreamSource(stream);
-      const processor = audioCtx.createScriptProcessor(4096, 1, 1);
-      processorRef.current = processor;
-
-      let audioChunkCount = 0;
-
-      processor.onaudioprocess = event => {
-        if (
-          shouldProcessAudioRef.current &&
-          websocketRef.current &&
-          websocketRef.current.readyState === WebSocket.OPEN
-        ) {
-          const inputData = event.inputBuffer.getChannelData(0);
-          const pcmData = new Int16Array(inputData.length);
-
-          for (let i = 0; i < inputData.length; i++) {
-            pcmData[i] = Math.max(-32768, Math.min(32767, inputData[i] * 32768));
-          }
-
-          audioChunkCount++;
-          console.log(`Sending audio chunk #${audioChunkCount} to backend:`, {
-            samples: pcmData.length,
-            bytes: pcmData.buffer.byteLength,
-            websocketState: websocketRef.current.readyState,
-          });
-
-          try {
-            websocketRef.current.send(pcmData.buffer);
-          } catch (error) {
-            console.error(' Error sending audio data:', error);
-          }
-        }
-      };
-
-      source.connect(processor);
-      processor.connect(audioCtx.destination);
-
-      setIsRecording(true);
-      setIsPaused(false);
-      setDictationText('');
-      onDictationTextChange('');
-      shouldProcessAudioRef.current = true;
     } catch (error) {
-      console.error('Failed to start recording:', error);
+      cleanupResources();
     }
   };
 
   const handlePauseRecording = () => {
-    if (!isRecording) {
+    if (!isRecording || isPaused) {
       return;
     }
-    setIsPaused(prev => {
-      const newPausedState = !prev;
-      console.log(newPausedState ? ' Recording paused' : 'Recording resumed');
-      return newPausedState;
-    });
+    try {
+      mediaRecorderRef.current?.pause();
+      setIsPaused(true);
+    } catch (error) {}
+  };
+
+  const handleResumeRecording = () => {
+    if (!isRecording || !isPaused) {
+      return;
+    }
+    try {
+      mediaRecorderRef.current?.resume();
+      setIsPaused(false);
+    } catch (error) {}
   };
 
   const handleStopRecording = () => {
+    cleanupResources();
     setIsRecording(false);
     setIsPaused(false);
-    shouldProcessAudioRef.current = false;
-    cleanupAudioResources();
   };
 
   const handleSubmit = () => {
@@ -849,7 +778,7 @@ function DictationPanel({
 
   useEffect(() => {
     return () => {
-      cleanupAudioResources();
+      cleanupResources();
     };
   }, []);
 
@@ -874,15 +803,17 @@ function DictationPanel({
           >
             {isRecording && !isPaused ? 'Recording...' : 'Start'}
           </Button>
+
           <Button
             variant={isPaused ? 'default' : 'secondary'}
             size="sm"
-            onClick={handlePauseRecording}
+            onClick={isPaused ? handleResumeRecording : handlePauseRecording}
             disabled={!isRecording}
             className="flex-1"
           >
             {isPaused ? 'Resume' : 'Pause'}
           </Button>
+
           <Button
             variant="secondary"
             size="sm"
@@ -914,8 +845,8 @@ function DictationPanel({
           <Button
             variant="default"
             size="sm"
-            onClick={onSubmit}
-            disabled={isAnalyzing || !dictationText || dictationText === 'Start dictating.....'}
+            onClick={handleSubmit}
+            disabled={isAnalyzing || !dictationText || dictationText.trim() === ''}
           >
             <img
               src="/assets/icons/ai-analysis.svg"

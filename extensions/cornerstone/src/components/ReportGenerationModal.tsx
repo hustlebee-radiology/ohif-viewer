@@ -200,7 +200,7 @@ export default function ReportGenerationModal({
       ws.onmessage = evt => {
         const text = typeof evt.data === 'string' ? evt.data : '';
         if (text) {
-          setDictationText(prev => (prev ? prev + ' ' : '') + text);
+          setDictationText(text);
         }
       };
       ws.onerror = err => {};
@@ -720,18 +720,6 @@ function DictationPanel({
           cleanupResources();
         }
       };
-
-      ws.onmessage = event => {
-        const transcript = event.data as string;
-        if (transcript && transcript.trim()) {
-          setDictationText(prev => {
-            const newText = prev ? prev + ' ' + transcript : transcript;
-            onDictationTextChange(newText);
-            return newText;
-          });
-        }
-      };
-
       ws.onerror = error => {
         setConnectionStatus('disconnected');
       };

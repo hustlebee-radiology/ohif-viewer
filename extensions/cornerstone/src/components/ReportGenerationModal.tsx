@@ -197,12 +197,6 @@ export default function ReportGenerationModal({
           mr.start(250);
         } catch (err) {}
       };
-      ws.onmessage = evt => {
-        const text = typeof evt.data === 'string' ? evt.data : '';
-        if (text) {
-          setDictationText(text);
-        }
-      };
       ws.onerror = err => {};
       ws.onclose = () => {};
     } catch (e) {}
@@ -718,6 +712,16 @@ function DictationPanel({
           mediaRecorder.start(250);
         } catch (error) {
           cleanupResources();
+        }
+      };
+      ws.onmessage = event => {
+        const transcript = event.data as string;
+        if (transcript && transcript.trim()) {
+          setDictationText(prev => {
+            const newText = transcript;
+            onDictationTextChange(newText);
+            return newText;
+          });
         }
       };
       ws.onerror = error => {

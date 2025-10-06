@@ -1,6 +1,7 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { Editor } from '@tinymce/tinymce-react';
 import apiClient from '../../../../platform/app/src/utils/apiClient';
+import { getTinyMCEConfig } from '../config/tinymceConfig';
 import {
   Button,
   DropdownMenu,
@@ -471,77 +472,10 @@ function TinyMCEEditor({
       <div className="h-full min-h-0 flex-1">
         <div className="h-full min-h-0 flex-1 [&_.tox-tinymce]:bg-[#1a1a1a] [&_.tox-edit-area]:bg-[#1a1a1a] [&_.tox-edit-area__iframe]:bg-[#1a1a1a]">
           <Editor
-            apiKey="b0ggc7dfi30js013j5ardxxnumm26dhq5duxeqb15qt369l5"
             onInit={(_evt, editor) => (editorRef.current = editor)}
             initialValue={initialValue}
             init={{
-              height: '100%',
-              min_height: 600,
-              menubar: false,
-              skin: 'oxide-dark',
-              content_css: 'dark',
-              plugins: [
-                'advlist',
-                'autolink',
-                'lists',
-                'link',
-                'image',
-                'charmap',
-                'preview',
-                'anchor',
-                'searchreplace',
-                'visualblocks',
-                'code',
-                'fullscreen',
-                'insertdatetime',
-                'media',
-                'table',
-                'code',
-                'help',
-                'wordcount',
-              ],
-              toolbar:
-                'undo redo | blocks | ' +
-                'bold italic forecolor | alignleft aligncenter ' +
-                'alignright alignjustify | bullist numlist outdent indent | ' +
-                'removeformat | help',
-              content_style: `
-                body {
-                  font-family: 'Inter', sans-serif;
-                  font-size: 14px;
-                  background-color: #1a1a1a !important;
-                  color: #ffffff !important;
-                  margin: 0;
-                  padding: 16px;
-                }
-                p { margin: 0 0 16px 0; color: #ffffff !important; }
-                h1, h2, h3, h4, h5, h6 { color: #ffffff !important; }
-                ul, ol { color: #ffffff !important; }
-                li { color: #ffffff !important; }
-                blockquote {
-                  border-left: 4px solid #3b82f6;
-                  margin: 16px 0;
-                  padding-left: 16px;
-                  color: #d1d5db !important;
-                }
-                .mce-content-body {
-                  background-color: #1a1a1a !important;
-                  color: #ffffff !important;
-                }
-                .tox-edit-area {
-                  background-color: #1a1a1a !important;
-                }
-                .tox-edit-area__iframe {
-                  background-color: #1a1a1a !important;
-                }
-              `,
-              toolbar_mode: 'wrap',
-              toolbar_sticky: true,
-              toolbar_sticky_offset: 0,
-              branding: false,
-              elementpath: false,
-              resize: false,
-              statusbar: false,
+              ...getTinyMCEConfig(true),
               setup: editor => {
                 editor.on('init', () => {
                   const iframe = editor.getContainer().querySelector('iframe');

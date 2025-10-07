@@ -773,7 +773,7 @@ function DictationPanel({
             variant="default"
             size="sm"
             onClick={handleSubmit}
-            disabled={isAnalyzing || !dictationText || dictationText.trim() === ''}
+            disabled={isAnalyzing || !dictationText || dictationText.trim() === '' || isRecording}
           >
             <img
               src="/assets/icons/ai-analysis.svg"

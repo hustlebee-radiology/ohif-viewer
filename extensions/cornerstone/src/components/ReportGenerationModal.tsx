@@ -30,10 +30,18 @@ export default function ReportGenerationModal({
   hide,
   initialContent,
 }: ReportGenerationModalProps) {
-  type AppWindow = Window & { config?: { NEXT_API_BASE_URL?: string; NEXT_WS_BASE_URL?: string } };
+  type AppWindow = Window & {
+    config?: {
+      NEXT_API_BASE_URL?: string;
+      NEXT_WS_BASE_URL?: string;
+      NEXT_DOCTOR_REPORT_URL?: string;
+    };
+  };
   const WS_ENV: string | undefined = (window as AppWindow).config?.NEXT_WS_BASE_URL;
   const WS_URL =
     WS_ENV || ((window as AppWindow).config?.NEXT_API_BASE_URL?.replace(/^http/, 'ws') ?? '');
+  const DOCTOR_REPORT_URL: string | undefined = (window as AppWindow).config
+    ?.NEXT_DOCTOR_REPORT_URL;
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [templates, setTemplates] = useState<
     Array<{ id: string; name: string; htmlContent: string }>
@@ -281,8 +289,8 @@ export default function ReportGenerationModal({
         status: 'submitted',
       });
       if (userId) {
-        const origin = window.location.origin;
-        window.location.href = `${origin}/doctor/${userId}/reports`;
+        const baseUrl = DOCTOR_REPORT_URL || window.location.origin;
+        window.location.href = `${baseUrl}/doctor/${userId}/reports`;
       } else {
         hide();
       }
@@ -332,7 +340,8 @@ export default function ReportGenerationModal({
 
   return (
     <div className="container-report flex h-full flex-col p-4">
-      <div className="mb-6 flex items-center gap-4">
+      <h2 className="mb-2 text-lg font-semibold text-white">Select Templates</h2>
+      <div className="mb-2 flex items-center gap-4">
         <div className="flex-1">
           <DropdownMenu
             open={isDropdownOpen}
@@ -349,7 +358,7 @@ export default function ReportGenerationModal({
             }}
           >
             <DropdownMenuTrigger asChild>
-              <button className="bg-background border-input hover:bg-accent text-foreground hover:text-accent-foreground flex w-full items-center justify-between gap-2 rounded border px-4 py-3 text-base transition-colors">
+              <button className="bg-background border-input hover:bg-accent text-foreground hover:text-accent-foreground flex w-full items-center justify-between gap-2 rounded border px-4 py-2 text-base transition-colors">
                 <div className="flex items-center">
                   <span>{templateName || 'Select Template'}</span>
                 </div>
@@ -772,7 +781,7 @@ function DictationPanel({
             variant="default"
             size="sm"
             onClick={handleSubmit}
-            disabled={isAnalyzing || !dictationText || dictationText.trim() === ''}
+            disabled={isAnalyzing || !dictationText || dictationText.trim() === '' || isRecording}
           >
             <img
               src="/assets/icons/ai-analysis.svg"

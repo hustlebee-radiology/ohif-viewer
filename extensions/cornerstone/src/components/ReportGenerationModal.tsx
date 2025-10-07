@@ -30,10 +30,18 @@ export default function ReportGenerationModal({
   hide,
   initialContent,
 }: ReportGenerationModalProps) {
-  type AppWindow = Window & { config?: { NEXT_API_BASE_URL?: string; NEXT_WS_BASE_URL?: string } };
+  type AppWindow = Window & {
+    config?: {
+      NEXT_API_BASE_URL?: string;
+      NEXT_WS_BASE_URL?: string;
+      NEXT_DOCTOR_REPORT_URL?: string;
+    };
+  };
   const WS_ENV: string | undefined = (window as AppWindow).config?.NEXT_WS_BASE_URL;
   const WS_URL =
     WS_ENV || ((window as AppWindow).config?.NEXT_API_BASE_URL?.replace(/^http/, 'ws') ?? '');
+  const DOCTOR_REPORT_URL: string | undefined = (window as AppWindow).config
+    ?.NEXT_DOCTOR_REPORT_URL;
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [templates, setTemplates] = useState<
     Array<{ id: string; name: string; htmlContent: string }>
@@ -281,8 +289,8 @@ export default function ReportGenerationModal({
         status: 'submitted',
       });
       if (userId) {
-        const origin = window.location.origin;
-        window.location.href = `${origin}/doctor/${userId}/reports`;
+        const baseUrl = DOCTOR_REPORT_URL || window.location.origin;
+        window.location.href = `${baseUrl}/doctor/${userId}/reports`;
       } else {
         hide();
       }

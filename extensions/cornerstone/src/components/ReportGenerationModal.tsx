@@ -519,6 +519,8 @@ function DictationPanel({
   const [accumulatedFinalText, setAccumulatedFinalText] = useState('');
   const [currentFinalText, setCurrentFinalText] = useState('');
   const [currentInterimText, setCurrentInterimText] = useState('');
+  const [errorMessage, setErrorMessage] = useState<string>('');
+  const [statusMessage, setStatusMessage] = useState<string>('');
 
   const wsRef = useRef<WebSocket | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -549,6 +551,47 @@ function DictationPanel({
 
   const handleStartRecording = async () => {
     try {
+      console.log('🎤 [Dictation] Starting recording process...');
+
+      // Clear any previous errors
+      setErrorMessage('');
+      setStatusMessage('Requesting microphone permission...');
+
+      // Step 1: Request microphone permission FIRST
+      console.log('🎤 [Dictation] Requesting microphone permission...');
+      let stream: MediaStream;
+
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        console.log('✅ [Dictation] Microphone permission granted');
+        mediaStreamRef.current = stream;
+      } catch (micError: unknown) {
+        console.error('❌ [Dictation] Microphone permission denied or error:', micError);
+        const errorMsg =
+          micError instanceof Error && micError.name === 'NotAllowedError'
+            ? 'Microphone permission denied. Please allow microphone access in your browser settings.'
+            : micError instanceof Error && micError.name === 'NotFoundError'
+              ? 'No microphone found. Please connect a microphone and try again.'
+              : `Microphone error: ${micError instanceof Error ? micError.message : 'Unknown error'}`;
+
+        setErrorMessage(errorMsg);
+        setStatusMessage('');
+        return;
+      }
+
+      // Step 2: Check MediaRecorder support
+      const mimeType = 'audio/webm;codecs=opus';
+      if (!MediaRecorder.isTypeSupported(mimeType)) {
+        console.error('❌ [Dictation] Browser does not support audio/webm;codecs=opus');
+        setErrorMessage(
+          'Your browser does not support audio recording. Please use Chrome, Edge, or Firefox.'
+        );
+        setStatusMessage('');
+        cleanupResources();
+        return;
+      }
+
+      // Step 3: Setup states
       setIsRecording(true);
       setIsPaused(false);
       setDictationText('');
@@ -556,21 +599,19 @@ function DictationPanel({
       setCurrentFinalText('');
       setCurrentInterimText('');
       onDictationTextChange('');
+      setStatusMessage('Connecting to speech service...');
 
+      // Step 4: Connect to WebSocket
+      console.log('🌐 [Dictation] Connecting to WebSocket:', wsUrl);
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
       ws.binaryType = 'arraybuffer';
 
       ws.onopen = async () => {
+        console.log('✅ [Dictation] WebSocket connected successfully');
+        setStatusMessage('Connected. Starting recording...');
+
         try {
-          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-          mediaStreamRef.current = stream;
-
-          const mimeType = 'audio/webm;codecs=opus';
-          if (!MediaRecorder.isTypeSupported(mimeType)) {
-            throw new Error('Browser does not support audio/webm;codecs=opus');
-          }
-
           const mediaRecorder = new MediaRecorder(stream, {
             mimeType,
             audioBitsPerSecond: 128000,
@@ -583,14 +624,22 @@ function DictationPanel({
                 const arrayBuffer = await event.data.arrayBuffer();
                 ws.send(arrayBuffer);
               } catch (error) {
-                console.error('Error sending data to WebSocket:', error);
+                console.error('❌ [Dictation] Error sending data to WebSocket:', error);
               }
             }
           };
 
-          // Record in 2s chunks to match sample-stt.html implementation
+          // Record in 2s chunks
           mediaRecorder.start(2000);
-        } catch (error) {
+          setStatusMessage('');
+          setErrorMessage('');
+          console.log('🎙️ [Dictation] Recording started');
+        } catch (error: unknown) {
+          console.error('❌ [Dictation] Error starting MediaRecorder:', error);
+          setErrorMessage(
+            `Recording error: ${error instanceof Error ? error.message : 'Unknown error'}`
+          );
+          setStatusMessage('');
           cleanupResources();
         }
       };
@@ -605,7 +654,7 @@ function DictationPanel({
 
           if (hasSpeechEnded) {
             // Speech ended - append final text to accumulated text
-            console.log('✅ Speech ended, final text:', finalTextPart);
+            console.log('✅ [Dictation] Speech ended, final text:', finalTextPart);
 
             // Clear current interim text
             setCurrentInterimText('');
@@ -638,15 +687,38 @@ function DictationPanel({
             });
           }
         } catch (parseError) {
-          console.error('Failed to parse STT message', parseError);
+          console.error('❌ [Dictation] Failed to parse STT message', parseError);
         }
       };
 
-      ws.onerror = _error => {};
+      ws.onerror = error => {
+        console.error('❌ [Dictation] WebSocket error:', error);
+        setErrorMessage(
+          'Connection error: Unable to connect to speech service. Please check your connection.'
+        );
+        setStatusMessage('');
+        setIsRecording(false);
+      };
 
-      ws.onclose = () => {};
-    } catch (error) {
+      ws.onclose = event => {
+        console.log('🔌 [Dictation] WebSocket closed:', event.code, event.reason);
+        if (event.code !== 1000) {
+          // 1000 is normal closure
+          setErrorMessage(
+            `Connection closed unexpectedly (code: ${event.code}). Please try again.`
+          );
+          setStatusMessage('');
+          setIsRecording(false);
+        }
+      };
+    } catch (error: unknown) {
+      console.error('❌ [Dictation] Unexpected error in handleStartRecording:', error);
+      setErrorMessage(
+        `Unexpected error: ${error instanceof Error ? error.message : 'Please try again'}`
+      );
+      setStatusMessage('');
       cleanupResources();
+      setIsRecording(false);
     }
   };
 
@@ -655,10 +727,13 @@ function DictationPanel({
       return;
     }
     try {
+      console.log('⏸️ [Dictation] Pausing recording...');
       mediaRecorderRef.current?.pause();
       setIsPaused(true);
+      setStatusMessage('Recording paused');
     } catch (error) {
-      console.error('Error pausing recording:', error);
+      console.error('❌ [Dictation] Error pausing recording:', error);
+      setErrorMessage('Failed to pause recording');
     }
   };
 
@@ -667,28 +742,37 @@ function DictationPanel({
       return;
     }
     try {
+      console.log('▶️ [Dictation] Resuming recording...');
       mediaRecorderRef.current?.resume();
       setIsPaused(false);
+      setStatusMessage('');
     } catch (error) {
-      console.error('Error resuming recording:', error);
+      console.error('❌ [Dictation] Error resuming recording:', error);
+      setErrorMessage('Failed to resume recording');
     }
   };
 
   const handleStopRecording = () => {
+    console.log('⏹️ [Dictation] Stopping recording...');
     cleanupResources();
     setIsRecording(false);
     setIsPaused(false);
     setCurrentInterimText('');
     setCurrentFinalText('');
+    setStatusMessage('');
+    console.log('✅ [Dictation] Recording stopped');
   };
 
   const handleSubmit = () => {
+    console.log('🤖 [Dictation] Submitting dictation for AI analysis...');
     onSubmit();
     setDictationText('');
     onDictationTextChange('');
     setAccumulatedFinalText('');
     setCurrentFinalText('');
     setCurrentInterimText('');
+    setErrorMessage('');
+    setStatusMessage('');
   };
 
   useEffect(() => {
@@ -707,6 +791,26 @@ function DictationPanel({
           <p>Dictate clinical findings and describe what you observe.</p>
           <p>Voice punctuation: say &quot;period&quot;, &quot;comma&quot;, etc...</p>
         </div>
+
+        {/* Error Message */}
+        {errorMessage && (
+          <div className="rounded-md border border-red-500 bg-red-500/10 p-3 text-sm text-red-400">
+            <div className="flex items-start gap-2">
+              <Icons.Alert className="mt-0.5 h-4 w-4 flex-shrink-0" />
+              <span>{errorMessage}</span>
+            </div>
+          </div>
+        )}
+
+        {/* Status Message */}
+        {statusMessage && (
+          <div className="rounded-md border border-blue-500 bg-blue-500/10 p-3 text-sm text-blue-400">
+            <div className="flex items-start gap-2">
+              <Icons.LoadingSpinner className="mt-0.5 h-4 w-4 flex-shrink-0 animate-spin" />
+              <span>{statusMessage}</span>
+            </div>
+          </div>
+        )}
 
         <div className="flex gap-2">
           <Button

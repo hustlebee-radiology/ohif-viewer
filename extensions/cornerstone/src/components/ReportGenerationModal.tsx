@@ -51,11 +51,6 @@ export default function ReportGenerationModal({
   const [isDictationMode, setIsDictationMode] = useState(false);
   const [dictationText, setDictationText] = useState('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const wsRef = useRef<WebSocket | null>(null);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const mediaStreamRef = useRef<MediaStream | null>(null);
-  const [isRecording, setIsRecording] = useState(false);
-  const [isPaused, setIsPaused] = useState(false);
   const [doctorInfo, setDoctorInfo] = useState<{
     name: string;
     signatureUrl: string;
@@ -87,10 +82,11 @@ export default function ReportGenerationModal({
         params: modality ? { modality } : undefined,
       });
       setTemplates(response.data);
-    } catch (error) {}
+    } catch (error) {
+      console.error('Error fetching templates:', error);
+    }
   };
 
-  // Helper function to get cookie value
   const getCookie = (name: string): string | null => {
     if (typeof document === 'undefined') {
       return null;
@@ -104,11 +100,8 @@ export default function ReportGenerationModal({
     return null;
   };
 
-  // Fetch doctor details based on userId from URL
   const fetchDoctorDetails = useCallback(async () => {
     try {
-      // setIsLoadingDoctor(true);
-      // Fetch doctor details on component mount
       const urlParams = new URLSearchParams(window.location.search);
       const userId = urlParams.get('userId');
 
@@ -156,9 +149,7 @@ export default function ReportGenerationModal({
         signatureUrl: signatureUrl,
       });
     } catch (error) {
-    } finally {
-      // setIsLoadingDoctor(false);
-      // Show success message or notification
+      console.error('Error fetching doctor details:', error);
     }
   }, []);
 
@@ -178,64 +169,6 @@ export default function ReportGenerationModal({
     setDictationText('');
   };
 
-  const handleStartRecording = () => {
-    if (isRecording) {
-      return;
-    }
-    setIsRecording(true);
-    setIsPaused(false);
-    setDictationText('');
-    try {
-      const ws = new WebSocket(WS_URL);
-      wsRef.current = ws;
-      ws.onopen = async () => {
-        try {
-          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-          mediaStreamRef.current = stream;
-          const mr = new MediaRecorder(stream, {
-            mimeType: 'audio/webm;codecs=opus',
-            audioBitsPerSecond: 128000,
-          });
-          mediaRecorderRef.current = mr;
-          mr.ondataavailable = async e => {
-            if (e.data && e.data.size > 0 && ws.readyState === WebSocket.OPEN) {
-              const buf = await e.data.arrayBuffer();
-              ws.send(buf);
-            }
-          };
-          mr.start(250);
-        } catch (err) {}
-      };
-      ws.onerror = err => {};
-      ws.onclose = () => {};
-    } catch (e) {}
-  };
-
-  const handlePauseRecording = () => {
-    if (!isRecording || isPaused) {
-      return;
-    }
-    try {
-      mediaRecorderRef.current?.pause();
-      setIsPaused(true);
-    } catch (e) {}
-  };
-
-  const handleStopRecording = () => {
-    try {
-      mediaRecorderRef.current?.stop();
-      mediaRecorderRef.current = null;
-      mediaStreamRef.current?.getTracks().forEach(t => t.stop());
-      mediaStreamRef.current = null;
-      wsRef.current?.close();
-      wsRef.current = null;
-    } catch (e) {
-    } finally {
-      setIsRecording(false);
-      setIsPaused(false);
-    }
-  };
-
   const handleSubmitDictation = async () => {
     if (!dictationText && !content) {
       return;
@@ -253,7 +186,7 @@ export default function ReportGenerationModal({
       }
       handleCloseDictation();
     } catch (error: unknown) {
-      const err = error as { response?: { data?: unknown }; message?: string };
+      console.error('Error submitting dictation:', error);
     } finally {
       setIsAnalyzing(false);
     }
@@ -283,7 +216,7 @@ export default function ReportGenerationModal({
     }
 
     try {
-      const report = await apiClient.post('/report', {
+      await apiClient.post('/report', {
         studyInstanceUID: studyInstanceUID,
         htmlContent: htmlContent,
         status: 'submitted',
@@ -294,7 +227,9 @@ export default function ReportGenerationModal({
       } else {
         hide();
       }
-    } catch (error) {}
+    } catch (error) {
+      console.error('Error submitting report:', error);
+    }
   };
 
   const handleSaveAsDraft = async (htmlContent: string) => {
@@ -305,14 +240,14 @@ export default function ReportGenerationModal({
     }
 
     try {
-      const draft = await apiClient.post('/report', {
+      await apiClient.post('/report', {
         studyInstanceUID: studyInstanceUID,
         htmlContent: htmlContent,
         status: 'draft',
       });
       alert('Draft saved successfully!');
     } catch (error) {
-      alert('Error saving draft. Please try again.');
+      console.error('Error saving draft:', error);
     }
   };
 
@@ -455,7 +390,6 @@ function TinyMCEEditor({
   const editorRef = useRef<{ getContent: () => string } | null>(null);
   const [hasContent, setHasContent] = useState(false);
 
-  // Update hasContent when content prop changes
   useEffect(() => {
     if (content && content.trim() !== '' && content !== '<p>&nbsp;</p>') {
       setHasContent(true);
@@ -516,7 +450,6 @@ function TinyMCEEditor({
                     }
                   }, 100);
 
-                  // Check initial content
                   const initialContent = editor.getContent();
                   setHasContent(
                     initialContent &&
@@ -525,7 +458,6 @@ function TinyMCEEditor({
                   );
                 });
 
-                // Listen for content changes
                 editor.on('input change keyup', () => {
                   const currentContent = editor.getContent();
                   const hasValidContent =
@@ -540,7 +472,6 @@ function TinyMCEEditor({
         </div>
       </div>
 
-      {/* Action Buttons */}
       <div className="mt-6 flex justify-center gap-4">
         <Button
           variant="outline"
@@ -585,9 +516,9 @@ function DictationPanel({
   const [isRecording, setIsRecording] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [dictationText, setDictationText] = useState('');
-  const [connectionStatus, setConnectionStatus] = useState<
-    'disconnected' | 'connecting' | 'connected'
-  >('disconnected');
+  const [accumulatedFinalText, setAccumulatedFinalText] = useState('');
+  const [currentFinalText, setCurrentFinalText] = useState('');
+  const [currentInterimText, setCurrentInterimText] = useState('');
 
   const wsRef = useRef<WebSocket | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -597,7 +528,9 @@ function DictationPanel({
     if (mediaRecorderRef.current) {
       try {
         mediaRecorderRef.current.stop();
-      } catch {}
+      } catch (error) {
+        console.error('Error stopping media recorder:', error);
+      }
       mediaRecorderRef.current = null;
     }
     if (mediaStreamRef.current) {
@@ -607,10 +540,11 @@ function DictationPanel({
     if (wsRef.current) {
       try {
         wsRef.current.close();
-      } catch {}
+      } catch (error) {
+        console.error('Error closing WebSocket:', error);
+      }
       wsRef.current = null;
     }
-    setConnectionStatus('disconnected');
   };
 
   const handleStartRecording = async () => {
@@ -618,16 +552,16 @@ function DictationPanel({
       setIsRecording(true);
       setIsPaused(false);
       setDictationText('');
+      setAccumulatedFinalText('');
+      setCurrentFinalText('');
+      setCurrentInterimText('');
       onDictationTextChange('');
-      setConnectionStatus('connecting');
 
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
       ws.binaryType = 'arraybuffer';
 
       ws.onopen = async () => {
-        setConnectionStatus('connected');
-
         try {
           const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
           mediaStreamRef.current = stream;
@@ -648,32 +582,69 @@ function DictationPanel({
               try {
                 const arrayBuffer = await event.data.arrayBuffer();
                 ws.send(arrayBuffer);
-              } catch (error) {}
+              } catch (error) {
+                console.error('Error sending data to WebSocket:', error);
+              }
             }
           };
 
-          mediaRecorder.start(250);
+          // Record in 2s chunks to match sample-stt.html implementation
+          mediaRecorder.start(2000);
         } catch (error) {
           cleanupResources();
         }
       };
+
       ws.onmessage = event => {
-        const transcript = event.data as string;
-        if (transcript && transcript.trim()) {
-          setDictationText(prev => {
-            const newText = transcript;
-            onDictationTextChange(newText);
-            return newText;
-          });
+        try {
+          const messageData = typeof event.data === 'string' ? event.data : '' + event.data;
+          const parsed = JSON.parse(messageData);
+          const hasSpeechEnded = Boolean(parsed?.hasSpeechEnded);
+          const finalTextPart = (parsed?.finalText ?? '').trim();
+          const interimTextPart = (parsed?.interimText ?? '').trim();
+
+          if (hasSpeechEnded) {
+            // Speech ended - append final text to accumulated text
+            console.log('✅ Speech ended, final text:', finalTextPart);
+
+            // Clear current interim text
+            setCurrentInterimText('');
+
+            // Add final text to accumulated text (only if not empty)
+            if (finalTextPart) {
+              setAccumulatedFinalText(prev => {
+                const newAccum = prev ? `${prev} ${finalTextPart}` : finalTextPart;
+                setDictationText(newAccum);
+                onDictationTextChange(newAccum);
+                return newAccum;
+              });
+            }
+
+            // Clear current display texts
+            setCurrentFinalText('');
+          } else {
+            // Speaking in progress - show final + interim text
+            const fullText = (finalTextPart + ' ' + interimTextPart).trim();
+
+            setCurrentFinalText(finalTextPart);
+            setCurrentInterimText(interimTextPart);
+
+            // Update dictation text with accumulated + current
+            setAccumulatedFinalText(prev => {
+              const combined = prev ? (fullText ? `${prev} ${fullText}` : prev) : fullText;
+              setDictationText(combined);
+              onDictationTextChange(combined);
+              return prev; // Keep accumulated unchanged while speaking
+            });
+          }
+        } catch (parseError) {
+          console.error('Failed to parse STT message', parseError);
         }
       };
-      ws.onerror = error => {
-        setConnectionStatus('disconnected');
-      };
 
-      ws.onclose = () => {
-        setConnectionStatus('disconnected');
-      };
+      ws.onerror = _error => {};
+
+      ws.onclose = () => {};
     } catch (error) {
       cleanupResources();
     }
@@ -686,7 +657,9 @@ function DictationPanel({
     try {
       mediaRecorderRef.current?.pause();
       setIsPaused(true);
-    } catch (error) {}
+    } catch (error) {
+      console.error('Error pausing recording:', error);
+    }
   };
 
   const handleResumeRecording = () => {
@@ -696,19 +669,26 @@ function DictationPanel({
     try {
       mediaRecorderRef.current?.resume();
       setIsPaused(false);
-    } catch (error) {}
+    } catch (error) {
+      console.error('Error resuming recording:', error);
+    }
   };
 
   const handleStopRecording = () => {
     cleanupResources();
     setIsRecording(false);
     setIsPaused(false);
+    setCurrentInterimText('');
+    setCurrentFinalText('');
   };
 
   const handleSubmit = () => {
     onSubmit();
     setDictationText('');
     onDictationTextChange('');
+    setAccumulatedFinalText('');
+    setCurrentFinalText('');
+    setCurrentInterimText('');
   };
 
   useEffect(() => {
@@ -762,8 +742,23 @@ function DictationPanel({
 
         <div className="min-h-0 flex-1">
           <div className="h-full overflow-y-auto rounded bg-black p-4 text-white">
-            {dictationText ? (
-              <p className="whitespace-pre-wrap text-white">{dictationText}</p>
+            {dictationText || accumulatedFinalText || currentFinalText || currentInterimText ? (
+              <div className="whitespace-pre-wrap text-white">
+                {/* Show accumulated final text (permanent) */}
+                {accumulatedFinalText && (
+                  <div className="mb-2 text-white">{accumulatedFinalText}</div>
+                )}
+
+                {/* Show current segment with final (black) + interim (gray/italic) */}
+                {(currentFinalText || currentInterimText) && (
+                  <div>
+                    {currentFinalText && <span className="text-white">{currentFinalText}</span>}
+                    {currentInterimText && (
+                      <span className="ml-1 italic text-gray-400">{currentInterimText}</span>
+                    )}
+                  </div>
+                )}
+              </div>
             ) : (
               <p className="muted-foreground text-center">
                 {isRecording

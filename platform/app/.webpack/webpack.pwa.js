@@ -149,6 +149,8 @@ module.exports = (env, argv) => {
       // https: true,
       open: true,
       port: OHIF_PORT,
+      // Allow all hosts - disables host header check
+      allowedHosts: 'all',
       client: {
         overlay: { errors: true, warnings: false },
       },

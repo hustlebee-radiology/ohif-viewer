@@ -12,7 +12,6 @@ const PUBLIC_DIR = path.resolve(__dirname, './platform/app/public');
 const APP_CONFIG = process.env.APP_CONFIG || 'config/default.js';
 const PUBLIC_URL = process.env.PUBLIC_URL || '/';
 
-const NODE_ENV = process.env.NODE_ENV;
 const BUILD_NUM = process.env.CIRCLE_BUILD_NUM || '0';
 const VERSION_NUMBER = fs.readFileSync(path.join(__dirname, './version.txt'), 'utf8') || '';
 const COMMIT_HASH = fs.readFileSync(path.join(__dirname, './commit.txt'), 'utf8') || '';
@@ -129,6 +128,8 @@ export default defineConfig({
   server: {
     port: OHIF_PORT,
     open: OHIF_OPEN,
+    // Allow all hosts - bind to all network interfaces
+    host: '0.0.0.0',
     proxy: {
       '/dicomweb': {
         target: 'http://localhost:5000',

@@ -22,8 +22,6 @@ interface HeaderProps {
     icon?: string;
     onClick: () => void;
   }>;
-  isReturnEnabled?: boolean;
-  onClickReturnButton?: () => void;
   isSticky?: boolean;
   WhiteLabeling?: {
     createLogoComponentFn?: (React: any, props: any) => ReactNode;
@@ -36,8 +34,6 @@ interface HeaderProps {
 function Header({
   children,
   menuOptions,
-  isReturnEnabled = true,
-  onClickReturnButton,
   isSticky = false,
   WhiteLabeling,
   PatientInfo,
@@ -45,12 +41,6 @@ function Header({
   Secondary,
   ...props
 }: HeaderProps): ReactNode {
-  const onClickReturn = () => {
-    if (isReturnEnabled && onClickReturnButton) {
-      onClickReturnButton();
-    }
-  };
-
   return (
     <IconPresentationProvider
       size="large"
@@ -61,19 +51,15 @@ function Header({
         {...props}
       >
         <div className="relative h-[48px] items-center">
-          <div className="absolute left-0 top-1/2 flex -translate-y-1/2 items-center">
-            <div
-              className={classNames(
-                'mr-3 inline-flex items-center',
-                isReturnEnabled && 'cursor-pointer'
+          <div className="absolute left-0 top-0 flex h-full items-center">
+            <div>
+              {WhiteLabeling?.createLogoComponentFn?.(React, props) || (
+                <img
+                  src="/assets/company-logo.png"
+                  alt="Insight AI"
+                  className="h-full max-h-10 w-auto"
+                />
               )}
-              onClick={onClickReturn}
-              data-cy="return-to-work-list"
-            >
-              {isReturnEnabled && <Icons.ArrowLeft className="text-primary ml-1 h-7 w-7" />}
-              <div className="ml-1">
-                {WhiteLabeling?.createLogoComponentFn?.(React, props) || <Icons.OHIFLogo />}
-              </div>
             </div>
           </div>
           <div className="absolute top-1/2 left-[250px] h-8 -translate-y-1/2">{Secondary}</div>

@@ -2,7 +2,6 @@ import React from 'react';
 import Actions from './Sources/Actions';
 import Add from './Sources/Add';
 import Cancel from './Sources/Cancel';
-import ChevronClosed from './Sources/ChevronClosed';
 import ChevronOpen from './Sources/ChevronOpen';
 import Code from './Sources/Code';
 import ColorChange from './Sources/ColorChange';
@@ -533,7 +532,6 @@ export const Icons = {
   ThumbnailView,
   Trash,
   ViewportViews,
-  ChevronClosed,
   ChevronOpen,
   ChevronRight: (props: IconProps) => {
     return (
@@ -565,7 +563,7 @@ export const Icons = {
   Play,
   Link,
   LoadingOHIFMark,
-  ArrowLeft: ChevronClosed,
+  ArrowLeft: ArrowLeftBold,
   ArrowRight,
   ArrowLeftBold,
   ArrowRightBold: (props: IconProps) => {

@@ -232,6 +232,34 @@ export default function ReportGenerationModal({
     }
   };
 
+  const handleDraftToSubmit = async (htmlContent: string, reportId: string) => {
+    const token =
+      localStorage.getItem('token') ||
+      sessionStorage.getItem('token') ||
+      localStorage.getItem('accessToken') ||
+      sessionStorage.getItem('accessToken') ||
+      localStorage.getItem('jwt') ||
+      sessionStorage.getItem('jwt') ||
+      (document.cookie.match(/(?:^|; )(?:authToken|accessToken|token|jwt)=([^;]*)/) || [])[1];
+    try {
+      await apiClient.patch(
+        `/report/${reportId}`,
+        {
+          htmlContent: htmlContent,
+          status: 'submitted',
+        },
+        token
+          ? {
+              headers: { Authorization: `Bearer ${decodeURIComponent(token)}` },
+              withCredentials: true,
+            }
+          : { withCredentials: true }
+      );
+    } catch (error) {
+      console.error('Error submitting report:', error);
+    }
+  };
+
   const handleSaveAsDraft = async (htmlContent: string) => {
     const studyInstanceUID = getStudyInstanceUID();
 
@@ -352,7 +380,15 @@ export default function ReportGenerationModal({
             <div className="flex-1">
               <TinyMCEEditor
                 content={content}
-                onSubmit={handleSubmitReport}
+                onSubmit={html => {
+                  const urlParams = new URLSearchParams(window.location.search);
+                  const reportId = urlParams.get('reportId');
+                  if (reportId) {
+                    handleDraftToSubmit(html, reportId);
+                  } else {
+                    handleSubmitReport(html);
+                  }
+                }}
                 onSaveAsDraft={handleSaveAsDraft}
               />
             </div>
@@ -369,7 +405,15 @@ export default function ReportGenerationModal({
         ) : (
           <TinyMCEEditor
             content={content}
-            onSubmit={handleSubmitReport}
+            onSubmit={html => {
+              const urlParams = new URLSearchParams(window.location.search);
+              const reportId = urlParams.get('reportId');
+              if (reportId) {
+                handleDraftToSubmit(html, reportId);
+              } else {
+                handleSubmitReport(html);
+              }
+            }}
             onSaveAsDraft={handleSaveAsDraft}
           />
         )}

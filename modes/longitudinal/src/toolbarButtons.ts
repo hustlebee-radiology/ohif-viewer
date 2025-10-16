@@ -1,4 +1,4 @@
-import type { Button } from '@ohif/core/types';
+// Note: avoid importing Button type to prevent cross-package type resolution issues
 
 import { EVENTS } from '@cornerstonejs/core';
 import { ViewportGridService } from '@ohif/core';
@@ -19,7 +19,7 @@ export const setToolActiveToolbar = {
   },
 };
 
-const toolbarButtons: Button[] = [
+const toolbarButtons = [
   // sections
   {
     id: 'MeasurementTools',
@@ -518,10 +518,23 @@ const toolbarButtons: Button[] = [
     uiType: 'ohif.toolButton',
     props: {
       icon: 'tool-circle',
-      label: 'Circle',
-      tooltip: 'Circle Tool',
+      label: 'HU',
+      tooltip: 'HU',
       commands: setToolActiveToolbar,
       evaluate: 'evaluate.cornerstoneTool',
+    },
+  },
+  {
+    id: 'MPR',
+    uiType: 'ohif.toolButton',
+    props: {
+      icon: 'layout-advanced-mpr',
+      label: 'MPR',
+      commands: {
+        commandName: 'setHangingProtocol',
+        commandOptions: { protocolId: 'mpr' },
+      },
+      evaluate: 'evaluate.action',
     },
   },
   {

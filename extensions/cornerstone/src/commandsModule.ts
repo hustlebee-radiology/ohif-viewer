@@ -2150,11 +2150,78 @@ function commandsModule({
     endRecordingForAnnotationGroup: () => {
       cornerstoneTools.AnnotationTool.endGroupRecording();
     },
-    // generate report
-    generateReport: () => {
-      const { UIModalService } = servicesManager.services;
+    generateReport: async () => {
+      const services: any = (servicesManager as any)?.services;
+      const UIModalService = services?.UIModalService;
+      const uiNotificationService = services?.uiNotificationService;
+      if (!UIModalService || !uiNotificationService) {
+        console.error('Required services are not available: UIModalService/uiNotificationService');
+        return;
+      }
+      const p = new URLSearchParams(window.location.search);
+      const userId = p.get('userId');
 
-      console.log('Generate Report button clicked - showing modal');
+      const getCookie = (name: string): string | null => {
+        const value = `; ${document.cookie}`;
+        const parts = value.split(`; ${name}=`);
+        if (parts.length === 2) {
+          const cookieValue = parts.pop()?.split(';').shift();
+          return cookieValue ? decodeURIComponent(cookieValue) : null;
+        }
+        return null;
+      };
+
+      try {
+        if (userId) {
+          const token =
+            localStorage.getItem('token') ||
+            sessionStorage.getItem('token') ||
+            localStorage.getItem('accessToken') ||
+            sessionStorage.getItem('accessToken') ||
+            localStorage.getItem('jwt') ||
+            sessionStorage.getItem('jwt') ||
+            getCookie('authToken') ||
+            getCookie('token') ||
+            getCookie('accessToken') ||
+            getCookie('jwt');
+
+          let resp;
+          if (token) {
+            try {
+              const { default: apiClient } = await import(
+                '../../../platform/app/src/utils/apiClient'
+              );
+              resp = await apiClient.get(`/user/${userId}`, {
+                headers: { Authorization: `Bearer ${token}` },
+              });
+            } catch (_) {
+              const { default: apiClient } = await import(
+                '../../../platform/app/src/utils/apiClient'
+              );
+              resp = await apiClient.get(`/user/${userId}`);
+            }
+          } else {
+            const { default: apiClient } = await import(
+              '../../../platform/app/src/utils/apiClient'
+            );
+            resp = await apiClient.get(`/user/${userId}`);
+          }
+
+          const userType = (resp?.data?.userType || resp?.data?.usertype || '')
+            .toString()
+            .toLowerCase();
+          if (userType === 'admin') {
+            uiNotificationService.show({
+              title: 'Action not allowed',
+              message: 'Report generation is not available for admin users.',
+              type: 'warning',
+            });
+            return;
+          }
+        }
+      } catch (err) {
+        console.error('Error fetching user details:', err);
+      }
 
       // Import the modal component dynamically to avoid circular dependencies
       import('./components/ReportGenerationModal').then(({ default: ReportGenerationModal }) => {

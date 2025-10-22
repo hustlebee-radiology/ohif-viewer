@@ -1,5 +1,4 @@
 import React, { ReactNode } from 'react';
-import classNames from 'classnames';
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -24,7 +23,7 @@ interface HeaderProps {
   }>;
   isSticky?: boolean;
   WhiteLabeling?: {
-    createLogoComponentFn?: (React: any, props: any) => ReactNode;
+    createLogoComponentFn?: (React: typeof React, props: Record<string, unknown>) => ReactNode;
   };
   PatientInfo?: ReactNode;
   Secondary?: ReactNode;

@@ -64,7 +64,7 @@ const StudyListTableRow = props => {
                               {isExpanded ? (
                                 <Icons.ChevronOpen className="-mt-1 mr-4 inline-flex" />
                               ) : (
-                                <Icons.ChevronClosed className="-mt-1 mr-4 inline-flex rotate-180" />
+                                <Icons.ChevronOpen className="-mt-1 mr-4 inline-flex rotate-180" />
                               )}
                             </div>
                           )}

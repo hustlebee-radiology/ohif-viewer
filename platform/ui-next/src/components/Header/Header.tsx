@@ -1,5 +1,4 @@
 import React, { ReactNode } from 'react';
-import classNames from 'classnames';
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -26,7 +25,7 @@ interface HeaderProps {
   onClickReturnButton?: () => void;
   isSticky?: boolean;
   WhiteLabeling?: {
-    createLogoComponentFn?: (React: any, props: any) => ReactNode;
+    createLogoComponentFn?: (React: typeof React, props: Record<string, unknown>) => ReactNode;
   };
   PatientInfo?: ReactNode;
   Secondary?: ReactNode;
@@ -45,12 +44,6 @@ function Header({
   Secondary,
   ...props
 }: HeaderProps): ReactNode {
-  const onClickReturn = () => {
-    if (isReturnEnabled && onClickReturnButton) {
-      onClickReturnButton();
-    }
-  };
-
   return (
     <IconPresentationProvider
       size="large"
@@ -62,15 +55,7 @@ function Header({
       >
         <div className="relative h-[48px] items-center">
           <div className="absolute left-0 top-1/2 flex -translate-y-1/2 items-center">
-            <div
-              className={classNames(
-                'mr-3 inline-flex items-center',
-                isReturnEnabled && 'cursor-pointer'
-              )}
-              onClick={onClickReturn}
-              data-cy="return-to-work-list"
-            >
-              {isReturnEnabled && <Icons.ArrowLeft className="text-primary ml-1 h-7 w-7" />}
+            <div className="mr-3 inline-flex items-center">
               <div className="ml-1">
                 {WhiteLabeling?.createLogoComponentFn?.(React, props) || <Icons.OHIFLogo />}
               </div>

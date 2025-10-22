@@ -87,6 +87,93 @@ export default function ReportGenerationModal({
     }
   };
 
+  const fetchPatientDetails = useCallback(async () => {
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      const doctorId = urlParams.get('userId');
+
+      if (!doctorId) {
+        return null;
+      }
+
+      const token =
+        localStorage.getItem('token') ||
+        sessionStorage.getItem('token') ||
+        localStorage.getItem('accessToken') ||
+        sessionStorage.getItem('accessToken') ||
+        localStorage.getItem('jwt') ||
+        sessionStorage.getItem('jwt') ||
+        getCookie('authToken') ||
+        getCookie('token') ||
+        getCookie('accessToken') ||
+        getCookie('jwt');
+
+      const url = `/dicom/doctor/${doctorId}/cases`;
+      let resp;
+      if (token) {
+        try {
+          resp = await apiClient.get(url, {
+            headers: { Authorization: `Bearer ${token}` },
+            withCredentials: true,
+          });
+        } catch (err) {
+          resp = await apiClient.get(url, { withCredentials: true });
+        }
+      } else {
+        resp = await apiClient.get(url, { withCredentials: true });
+      }
+
+      const cases = Array.isArray(resp?.data?.data)
+        ? resp.data.data
+        : Array.isArray(resp?.data)
+          ? resp.data
+          : [];
+
+      if (!cases.length) {
+        return null;
+      }
+
+      const study = cases[0];
+      const patient = study?.patient || {};
+      const studyDate = study?.studyDate ?? '-';
+      const Center = study?.uploadedByUser?.fullName ?? study?.uploadedBy?.fullName ?? '-';
+      const block = `
+  <table style="width:100%; border-collapse: collapse; margin-bottom:12px; border-bottom:1px solid #444;">
+    <tbody>
+      <tr>
+        <td style="padding:4px 8px;"><strong>Patient ID</strong></td>
+        <td style="padding:4px 8px;">${patient.id ?? '-'}</td>
+      </tr>
+      <tr>
+        <td style="padding:4px 8px;"><strong>Patient Name</strong></td>
+        <td style="padding:4px 8px;">${patient.name ?? '-'}</td>
+      </tr>
+      <tr>
+        <td style="padding:4px 8px;"><strong>Age</strong></td>
+        <td style="padding:4px 8px;">${patient.age ?? '-'}</td>
+      </tr>
+      <tr>
+        <td style="padding:4px 8px;"><strong>Referring Doctor</strong></td>
+        <td style="padding:4px 8px;">${patient.referringDoctor ?? '-'}</td>
+      </tr>
+      <tr>
+        <td style="padding:4px 8px;"><strong>Study Date</strong></td>
+        <td style="padding:4px 8px;">${studyDate}</td>
+      </tr>
+      <tr>
+        <td style="padding:4px 8px;"><strong>Uploaded By</strong></td>
+        <td style="padding:4px 8px;">${Center}</td>
+      </tr>
+    </tbody>
+  </table>
+  `;
+      return block;
+    } catch (e) {
+      console.error('Error fetching patient details:', e);
+      return null;
+    }
+  }, []);
+
   const getCookie = (name: string): string | null => {
     if (typeof document === 'undefined') {
       return null;
@@ -153,9 +240,14 @@ export default function ReportGenerationModal({
     }
   }, []);
 
-  const handleTemplateClick = (template: { id: string; name: string; htmlContent: string }) => {
+  const handleTemplateClick = async (template: {
+    id: string;
+    name: string;
+    htmlContent: string;
+  }) => {
+    const patientBlock = await fetchPatientDetails();
     const doctorBlock = buildDoctorBlock();
-    const composed = `${template.htmlContent || ''}${doctorBlock}`;
+    const composed = `${patientBlock || ''}${template.htmlContent || ''}${doctorBlock || ''}`;
     setContent(composed);
     setTemplateName(template.name);
   };
@@ -202,6 +294,7 @@ export default function ReportGenerationModal({
     <div><strong>Reporting Doctor:</strong> ${name}</div>
     <div style="margin:0;padding:0;line-height:1;"><strong>Signature:</strong><span style="margin:0;padding:0;line-height:1;">${signature}</span></div>
     <div style="height:8px"></div>
+    <div><i>Disclaimer: The radiology report is not absolute and has to be interpreted in the proper clinical setting. We encourage reinterpretation of report if required or suggested by treating doctor.</i></div>
   </div>
   `;
   };

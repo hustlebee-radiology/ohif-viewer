@@ -136,7 +136,7 @@ export default function ReportGenerationModal({
       const study = cases[0];
       const patient = study?.patient || {};
       const studyDate = study?.studyDate ?? '-';
-      const Center = study?.uploadedByUser?.fullName ?? study?.uploadedBy?.fullName ?? '-';
+      const HospitalName = study?.uploadedByUser?.fullName ?? study?.uploadedBy?.fullName ?? '-';
       const block = `
   <table style="width:100%; border-collapse: collapse; margin-bottom:12px; border-bottom:1px solid #444;">
     <tbody>
@@ -161,8 +161,8 @@ export default function ReportGenerationModal({
         <td style="padding:4px 8px;">${studyDate}</td>
       </tr>
       <tr>
-        <td style="padding:4px 8px;"><strong>Uploaded By</strong></td>
-        <td style="padding:4px 8px;">${Center}</td>
+        <td style="padding:4px 8px;"><strong>Hospital Name</strong></td>
+        <td style="padding:4px 8px;">${HospitalName}</td>
       </tr>
     </tbody>
   </table>

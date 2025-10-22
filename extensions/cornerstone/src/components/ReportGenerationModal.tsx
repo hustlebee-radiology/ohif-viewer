@@ -694,7 +694,30 @@ function DictationPanel({
       setErrorMessage('');
       setStatusMessage('Requesting microphone permission...');
 
-      // Step 1: Request microphone permission FIRST
+      // Step 1: Check if mediaDevices API is available (requires HTTPS or localhost)
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        console.error(
+          '❌ [Dictation] MediaDevices API not available - likely not in secure context'
+        );
+        const isLocalhost =
+          window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+        const protocol = window.location.protocol;
+
+        setErrorMessage(
+          `Microphone access requires HTTPS. ${
+            !isLocalhost && protocol === 'http:'
+              ? 'This page is served over HTTP. Please use HTTPS to enable microphone access.'
+              : 'Your browser does not support microphone access or the page is not in a secure context.'
+          }`
+        );
+        setStatusMessage('');
+        console.error(
+          `🔒 [Dictation] Current URL: ${window.location.href}, Protocol: ${protocol}, Is localhost: ${isLocalhost}`
+        );
+        return;
+      }
+
+      // Step 2: Request microphone permission
       console.log('🎤 [Dictation] Requesting microphone permission...');
       let stream: MediaStream;
 
@@ -716,7 +739,7 @@ function DictationPanel({
         return;
       }
 
-      // Step 2: Check MediaRecorder support
+      // Step 3: Check MediaRecorder support
       const mimeType = 'audio/webm;codecs=opus';
       if (!MediaRecorder.isTypeSupported(mimeType)) {
         console.error('❌ [Dictation] Browser does not support audio/webm;codecs=opus');
@@ -728,7 +751,7 @@ function DictationPanel({
         return;
       }
 
-      // Step 3: Setup states
+      // Step 4: Setup states
       setIsRecording(true);
       setIsPaused(false);
       setDictationText('');
@@ -738,7 +761,7 @@ function DictationPanel({
       onDictationTextChange('');
       setStatusMessage('Connecting to speech service...');
 
-      // Step 4: Connect to WebSocket
+      // Step 5: Connect to WebSocket
       console.log('🌐 [Dictation] Connecting to WebSocket:', wsUrl);
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;

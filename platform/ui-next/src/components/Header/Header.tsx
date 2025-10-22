@@ -21,8 +21,6 @@ interface HeaderProps {
     icon?: string;
     onClick: () => void;
   }>;
-  isReturnEnabled?: boolean;
-  onClickReturnButton?: () => void;
   isSticky?: boolean;
   WhiteLabeling?: {
     createLogoComponentFn?: (React: typeof React, props: Record<string, unknown>) => ReactNode;
@@ -35,8 +33,6 @@ interface HeaderProps {
 function Header({
   children,
   menuOptions,
-  isReturnEnabled = true,
-  onClickReturnButton,
   isSticky = false,
   WhiteLabeling,
   PatientInfo,
@@ -54,11 +50,15 @@ function Header({
         {...props}
       >
         <div className="relative h-[48px] items-center">
-          <div className="absolute left-0 top-1/2 flex -translate-y-1/2 items-center">
-            <div className="mr-3 inline-flex items-center">
-              <div className="ml-1">
-                {WhiteLabeling?.createLogoComponentFn?.(React, props) || <Icons.OHIFLogo />}
-              </div>
+          <div className="absolute left-0 top-0 flex h-full items-center">
+            <div>
+              {WhiteLabeling?.createLogoComponentFn?.(React, props) || (
+                <img
+                  src="/assets/company-logo.png"
+                  alt="Insight AI"
+                  className="h-full max-h-10 w-auto"
+                />
+              )}
             </div>
           </div>
           <div className="absolute top-1/2 left-[250px] h-8 -translate-y-1/2">{Secondary}</div>

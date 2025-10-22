@@ -91,6 +91,7 @@ function modeFactory({ modeConfiguration }) {
       // Init Default and SR ToolGroups
       initToolGroups(extensionManager, toolGroupService, commandsManager);
 
+      // @ts-expect-error toolbarButtons local typing is compatible with ToolbarService
       toolbarService.register(toolbarButtons);
       toolbarService.updateSection(toolbarService.sections.primary, [
         'MeasurementTools',
@@ -103,6 +104,12 @@ function modeFactory({ modeConfiguration }) {
         'Crosshairs',
         'MoreTools',
         'GenerateReport',
+        'Probe',
+        'StackScroll',
+        'Reset',
+        'Length',
+        'CircleROI',
+        'MPR',
       ]);
 
       toolbarService.updateSection(toolbarService.sections.viewportActionMenu.topLeft, [
@@ -133,27 +140,22 @@ function modeFactory({ modeConfiguration }) {
       ]);
 
       toolbarService.updateSection('MeasurementTools', [
-        'Length',
         'Bidirectional',
         'ArrowAnnotate',
         'EllipticalROI',
         'RectangleROI',
-        'CircleROI',
         'PlanarFreehandROI',
         'SplineROI',
         'LivewireContour',
       ]);
 
       toolbarService.updateSection('MoreTools', [
-        'Reset',
         'rotate-right',
         'flipHorizontal',
         'ImageSliceSync',
         'ReferenceLines',
         'ImageOverlayViewer',
-        'StackScroll',
         'invert',
-        'Probe',
         'Cine',
         'Angle',
         'CobbAngle',

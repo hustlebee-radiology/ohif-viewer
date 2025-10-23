@@ -11,6 +11,7 @@ export interface ModalProps {
   shouldCloseOnEsc?: boolean;
   shouldCloseOnOverlayClick?: boolean;
   containerClassName?: string;
+  showOverlay?: boolean;
 }
 
 const Modal: React.FC<ModalProps> = ({
@@ -21,6 +22,7 @@ const Modal: React.FC<ModalProps> = ({
   shouldCloseOnEsc = true,
   shouldCloseOnOverlayClick = true,
   containerClassName,
+  showOverlay = true,
 }) => {
   return (
     <Dialog
@@ -28,6 +30,7 @@ const Modal: React.FC<ModalProps> = ({
       onOpenChange={open => !open && onClose()}
       shouldCloseOnEsc={shouldCloseOnEsc}
       shouldCloseOnOverlayClick={shouldCloseOnOverlayClick}
+      showOverlay={showOverlay}
     >
       <DialogContent className={containerClassName}>
         {title && (

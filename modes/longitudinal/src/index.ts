@@ -103,13 +103,13 @@ function modeFactory({ modeConfiguration }) {
         'Layout',
         'Crosshairs',
         'MoreTools',
-        'GenerateReport',
         'Probe',
         'StackScroll',
         'Reset',
         'Length',
         'CircleROI',
         'MPR',
+        'GenerateReport',
       ]);
 
       toolbarService.updateSection(toolbarService.sections.viewportActionMenu.topLeft, [

@@ -1005,10 +1005,19 @@ function DictationPanel({
         </div>
 
         <div className="min-h-0 flex-1">
-          <div className="h-full overflow-y-auto rounded bg-black p-4 text-white">
+          <div
+            className="h-full overflow-y-auto rounded bg-black p-4 text-white"
+            contentEditable={!isRecording || isPaused}
+            suppressContentEditableWarning={true}
+            onInput={e => {
+              const newText = e.currentTarget.textContent || '';
+              setDictationText(newText);
+              onDictationTextChange(newText);
+            }}
+          >
             {dictationText || accumulatedFinalText || currentFinalText || currentInterimText ? (
               <div className="whitespace-pre-wrap text-white">
-                {/* Show accumulated final text (permanent) */}
+                {/* Show accumulated final text (permanent) - Make it editable */}
                 {accumulatedFinalText && (
                   <div className="mb-2 text-white">{accumulatedFinalText}</div>
                 )}

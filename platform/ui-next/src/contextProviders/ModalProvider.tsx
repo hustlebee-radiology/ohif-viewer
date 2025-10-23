@@ -7,6 +7,7 @@ interface ModalOptions {
   content?: React.ComponentType;
   contentProps?: Record<string, unknown>;
   containerClassName?: string;
+  showOverlay?: boolean;
 }
 
 interface ModalContextType {
@@ -35,6 +36,7 @@ export const useModal = () => {
 const DEFAULT_OPTIONS: ModalOptions = {
   title: '',
   shouldCloseOnEsc: true,
+  showOverlay: true,
 };
 
 interface ModalService {

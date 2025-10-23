@@ -14,7 +14,6 @@ import {
   CardTitle,
   CardContent,
 } from '@ohif/ui-next';
-
 declare global {
   interface Window {
     fetchModality: () => Promise<string | undefined>;
@@ -23,11 +22,19 @@ declare global {
 
 interface ReportGenerationModalProps {
   hide: () => void;
+  show?: (
+    options: Partial<{
+      showOverlay: boolean;
+      shouldCloseOnOverlayClick: boolean;
+      containerClassName: string;
+    }>
+  ) => void;
   initialContent?: string;
 }
 
 export default function ReportGenerationModal({
   hide,
+  show,
   initialContent,
 }: ReportGenerationModalProps) {
   type AppWindow = Window & {
@@ -394,9 +401,70 @@ export default function ReportGenerationModal({
     fetchDoctorDetails();
   }, [fetchDoctorDetails]);
 
+  const [isMinimized, setIsMinimized] = useState(false);
+
+  const handleMinimize = () => {
+    setIsMinimized(true);
+    if (show) {
+      show({
+        showOverlay: false,
+        shouldCloseOnOverlayClick: false,
+        containerClassName:
+          'fixed left-auto top-auto translate-x-0 translate-y-0 right-0 bottom-0 w-auto h-auto p-0 bg-transparent shadow-none border-none z-50',
+      });
+    }
+  };
+
+  const handleMaximize = () => {
+    setIsMinimized(false);
+    if (show) {
+      show({
+        shouldCloseOnOverlayClick: true,
+        containerClassName:
+          'max-w-6xl max-h-[95vh] w-[90vw] h-[90vh] overflow-y-auto scrollbar-thin scrollbar-thumb-primary scrollbar-track-background',
+      });
+    }
+  };
+
+  if (isMinimized) {
+    return (
+      <div className="fixed bottom-0 right-0 z-50 flex items-center gap-2">
+        <div className="bg-background border-border flex h-[200px] w-[400px] items-center gap-2 rounded-lg border p-2 shadow-lg">
+          <span className="text-foreground text-medium font-medium">Report Generation</span>
+          <button
+            onClick={handleMaximize}
+            className="bg-primary hover:bg-primary/90 text-primary-foreground focus:ring-primary rounded-full p-2 shadow-md transition-all duration-200 hover:scale-105 focus:outline-none focus:ring-2 focus:ring-offset-2"
+            title="Restore Report Generation Modal"
+          >
+            <Icons.Plus className="h-4 w-4" />
+          </button>
+          <button
+            onClick={hide}
+            className="text-muted-foreground hover:text-foreground hover:bg-muted focus:ring-ring rounded-full p-1 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2"
+            title="Close Report Generation Modal"
+          >
+            <Icons.Cancel className="h-3 w-3" />
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="container-report flex h-full flex-col p-4">
-      <h2 className="mb-2 text-lg font-semibold text-white">Select Templates</h2>
+      <div className="mb-2 flex items-center justify-between">
+        <h2 className="text-lg font-semibold text-white">Select Templates</h2>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleMinimize}
+            className="text-primary hover:text-primary-light rounded-sm opacity-70 transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:pointer-events-none"
+            title="Minimize"
+          >
+            <Icons.Minus className="h-4 w-4" />
+            <span className="sr-only">Minimize</span>
+          </button>
+        </div>
+      </div>
       <div className="mb-2 flex items-center gap-4">
         <div className="flex-1">
           <DropdownMenu

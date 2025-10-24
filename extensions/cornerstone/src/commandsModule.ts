@@ -2326,7 +2326,6 @@ function commandsModule({
           UIModalService.show({
             content: ReportGenerationModal,
             contentProps: { hide: () => UIModalService.hide(), initialContent, doctorInfo },
-            title: 'Select Templates',
             containerClassName:
               'max-w-6xl max-h-[95vh] w-[90vw] h-[90vh] overflow-y-auto scrollbar-thin scrollbar-thumb-primary scrollbar-track-background',
           });

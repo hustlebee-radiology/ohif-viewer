@@ -47,7 +47,7 @@ export default function ReportGenerationModal({
   const WS_ENV: string | undefined = (window as AppWindow).config?.NEXT_WS_BASE_URL;
   const WS_URL =
     WS_ENV || ((window as AppWindow).config?.NEXT_API_BASE_URL?.replace(/^http/, 'ws') ?? '');
-  const DOCTOR_REPORT_URL: string | undefined = (window as AppWindow).config
+  const NEXT_DOCTOR_REPORT_URL: string | undefined = (window as AppWindow).config
     ?.NEXT_DOCTOR_REPORT_URL;
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [templates, setTemplates] = useState<
@@ -322,8 +322,14 @@ export default function ReportGenerationModal({
         status: 'submitted',
       });
       if (userId) {
-        const baseUrl = DOCTOR_REPORT_URL || window.location.origin;
-        window.location.href = `${baseUrl}/doctor/${userId}/reports`;
+        const baseUrl = NEXT_DOCTOR_REPORT_URL;
+
+        if (window.opener && !window.opener.closed) {
+          window.opener.location.href = `${baseUrl}/doctor/${userId}/reports`;
+          window.close();
+        } else {
+          window.location.href = `${baseUrl}/doctor/${userId}/reports`;
+        }
       } else {
         hide();
       }

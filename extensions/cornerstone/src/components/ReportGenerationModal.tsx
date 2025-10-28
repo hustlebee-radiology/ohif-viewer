@@ -756,17 +756,13 @@ function DictationPanel({
 
   const handleStartRecording = async () => {
     try {
-      console.log('🎤 [Dictation] Starting recording process...');
-
       // Clear any previous errors
       setErrorMessage('');
       setStatusMessage('Requesting microphone permission...');
 
       // Step 1: Check if mediaDevices API is available (requires HTTPS or localhost)
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        console.error(
-          '❌ [Dictation] MediaDevices API not available - likely not in secure context'
-        );
+        console.error('[Dictation] MediaDevices API not available - likely not in secure context');
         const isLocalhost =
           window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
         const protocol = window.location.protocol;
@@ -780,21 +776,18 @@ function DictationPanel({
         );
         setStatusMessage('');
         console.error(
-          `🔒 [Dictation] Current URL: ${window.location.href}, Protocol: ${protocol}, Is localhost: ${isLocalhost}`
+          `[Dictation] Current URL: ${window.location.href}, Protocol: ${protocol}, Is localhost: ${isLocalhost}`
         );
         return;
       }
 
-      // Step 2: Request microphone permission
-      console.log('🎤 [Dictation] Requesting microphone permission...');
       let stream: MediaStream;
 
       try {
         stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        console.log('✅ [Dictation] Microphone permission granted');
         mediaStreamRef.current = stream;
       } catch (micError: unknown) {
-        console.error('❌ [Dictation] Microphone permission denied or error:', micError);
+        console.error('[Dictation] Microphone permission denied or error:', micError);
         const errorMsg =
           micError instanceof Error && micError.name === 'NotAllowedError'
             ? 'Microphone permission denied. Please allow microphone access in your browser settings.'
@@ -810,7 +803,7 @@ function DictationPanel({
       // Step 3: Check MediaRecorder support
       const mimeType = 'audio/webm;codecs=opus';
       if (!MediaRecorder.isTypeSupported(mimeType)) {
-        console.error('❌ [Dictation] Browser does not support audio/webm;codecs=opus');
+        console.error('[Dictation] Browser does not support audio/webm;codecs=opus');
         setErrorMessage(
           'Your browser does not support audio recording. Please use Chrome, Edge, or Firefox.'
         );
@@ -830,13 +823,11 @@ function DictationPanel({
       setStatusMessage('Connecting to speech service...');
 
       // Step 5: Connect to WebSocket
-      console.log('🌐 [Dictation] Connecting to WebSocket:', wsUrl);
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
       ws.binaryType = 'arraybuffer';
 
       ws.onopen = async () => {
-        console.log('✅ [Dictation] WebSocket connected successfully');
         setStatusMessage('Connected. Starting recording...');
 
         try {
@@ -852,7 +843,7 @@ function DictationPanel({
                 const arrayBuffer = await event.data.arrayBuffer();
                 ws.send(arrayBuffer);
               } catch (error) {
-                console.error('❌ [Dictation] Error sending data to WebSocket:', error);
+                console.error('[Dictation] Error sending data to WebSocket:', error);
               }
             }
           };
@@ -861,9 +852,8 @@ function DictationPanel({
           mediaRecorder.start(2000);
           setStatusMessage('');
           setErrorMessage('');
-          console.log('🎙️ [Dictation] Recording started');
         } catch (error: unknown) {
-          console.error('❌ [Dictation] Error starting MediaRecorder:', error);
+          console.error('[Dictation] Error starting MediaRecorder:', error);
           setErrorMessage(
             `Recording error: ${error instanceof Error ? error.message : 'Unknown error'}`
           );
@@ -881,13 +871,8 @@ function DictationPanel({
           const interimTextPart = (parsed?.interimText ?? '').trim();
 
           if (hasSpeechEnded) {
-            // Speech ended - append final text to accumulated text
-            console.log('✅ [Dictation] Speech ended, final text:', finalTextPart);
-
-            // Clear current interim text
             setCurrentInterimText('');
 
-            // Add final text to accumulated text (only if not empty)
             if (finalTextPart) {
               setAccumulatedFinalText(prev => {
                 const newAccum = prev ? `${prev} ${finalTextPart}` : finalTextPart;
@@ -897,16 +882,13 @@ function DictationPanel({
               });
             }
 
-            // Clear current display texts
             setCurrentFinalText('');
           } else {
-            // Speaking in progress - show final + interim text
             const fullText = (finalTextPart + ' ' + interimTextPart).trim();
 
             setCurrentFinalText(finalTextPart);
             setCurrentInterimText(interimTextPart);
 
-            // Update dictation text with accumulated + current
             setAccumulatedFinalText(prev => {
               const combined = prev ? (fullText ? `${prev} ${fullText}` : prev) : fullText;
               setDictationText(combined);
@@ -915,12 +897,12 @@ function DictationPanel({
             });
           }
         } catch (parseError) {
-          console.error('❌ [Dictation] Failed to parse STT message', parseError);
+          console.error('[Dictation] Failed to parse STT message', parseError);
         }
       };
 
       ws.onerror = error => {
-        console.error('❌ [Dictation] WebSocket error:', error);
+        console.error('[Dictation] WebSocket error:', error);
         setErrorMessage(
           'Connection error: Unable to connect to speech service. Please check your connection.'
         );
@@ -929,18 +911,14 @@ function DictationPanel({
       };
 
       ws.onclose = event => {
-        console.log('🔌 [Dictation] WebSocket closed:', event.code, event.reason);
         if (event.code !== 1000) {
-          // 1000 is normal closure
-          setErrorMessage(
-            `Connection closed unexpectedly (code: ${event.code}). Please try again.`
-          );
+          setErrorMessage(`Recording Stopped.`);
           setStatusMessage('');
           setIsRecording(false);
         }
       };
     } catch (error: unknown) {
-      console.error('❌ [Dictation] Unexpected error in handleStartRecording:', error);
+      console.error('[Dictation] Unexpected error in handleStartRecording:', error);
       setErrorMessage(
         `Unexpected error: ${error instanceof Error ? error.message : 'Please try again'}`
       );
@@ -955,12 +933,11 @@ function DictationPanel({
       return;
     }
     try {
-      console.log('⏸️ [Dictation] Pausing recording...');
       mediaRecorderRef.current?.pause();
       setIsPaused(true);
       setStatusMessage('Recording paused');
     } catch (error) {
-      console.error('❌ [Dictation] Error pausing recording:', error);
+      console.error('[Dictation] Error pausing recording:', error);
       setErrorMessage('Failed to pause recording');
     }
   };
@@ -970,29 +947,25 @@ function DictationPanel({
       return;
     }
     try {
-      console.log('▶️ [Dictation] Resuming recording...');
       mediaRecorderRef.current?.resume();
       setIsPaused(false);
       setStatusMessage('');
     } catch (error) {
-      console.error('❌ [Dictation] Error resuming recording:', error);
+      console.error('[Dictation] Error resuming recording:', error);
       setErrorMessage('Failed to resume recording');
     }
   };
 
   const handleStopRecording = () => {
-    console.log('⏹️ [Dictation] Stopping recording...');
     cleanupResources();
     setIsRecording(false);
     setIsPaused(false);
     setCurrentInterimText('');
     setCurrentFinalText('');
     setStatusMessage('');
-    console.log('✅ [Dictation] Recording stopped');
   };
 
   const handleSubmit = () => {
-    console.log('🤖 [Dictation] Submitting dictation for AI analysis...');
     onSubmit();
     setDictationText('');
     onDictationTextChange('');
@@ -1073,10 +1046,19 @@ function DictationPanel({
         </div>
 
         <div className="min-h-0 flex-1">
-          <div className="h-full overflow-y-auto rounded bg-black p-4 text-white">
+          <div
+            className="h-full overflow-y-auto rounded bg-black p-4 text-white"
+            contentEditable={!isRecording || isPaused}
+            suppressContentEditableWarning={true}
+            onInput={e => {
+              const newText = e.currentTarget.textContent || '';
+              setDictationText(newText);
+              onDictationTextChange(newText);
+            }}
+          >
             {dictationText || accumulatedFinalText || currentFinalText || currentInterimText ? (
               <div className="whitespace-pre-wrap text-white">
-                {/* Show accumulated final text (permanent) */}
+                {/* Show accumulated final text (permanent) - Make it editable */}
                 {accumulatedFinalText && (
                   <div className="mb-2 text-white">{accumulatedFinalText}</div>
                 )}

@@ -432,160 +432,159 @@ export default function ReportGenerationModal({
     }
   };
 
-  if (isMinimized) {
-    return (
-      <div className="fixed bottom-0 right-0 z-50 flex items-center gap-2">
-        <div className="bg-background border-border flex h-[200px] w-[400px] items-center gap-2 rounded-lg border p-2 shadow-lg">
-          <span className="text-foreground text-medium font-medium">Report Generation</span>
-          <button
-            onClick={handleMaximize}
-            className="bg-primary hover:bg-primary/90 text-primary-foreground focus:ring-primary rounded-full p-2 shadow-md transition-all duration-200 hover:scale-105 focus:outline-none focus:ring-2 focus:ring-offset-2"
-            title="Restore Report Generation Modal"
-          >
-            <Icons.Plus className="h-4 w-4" />
-          </button>
-          <button
-            onClick={hide}
-            className="text-muted-foreground hover:text-foreground hover:bg-muted focus:ring-ring rounded-full p-1 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2"
-            title="Close Report Generation Modal"
-          >
-            <Icons.Cancel className="h-3 w-3" />
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="container-report flex h-full flex-col p-4">
-      <div className="mb-2 flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-white">Select Templates</h2>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={handleMinimize}
-            className="text-primary hover:text-primary-light rounded-sm opacity-70 transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:pointer-events-none"
-            title="Minimize"
-          >
-            <Icons.Minus className="h-4 w-4" />
-            <span className="sr-only">Minimize</span>
-          </button>
-        </div>
-      </div>
-      <div className="mb-2 flex items-center gap-4">
-        <div className="flex-1">
-          <DropdownMenu
-            open={isDropdownOpen}
-            onOpenChange={async open => {
-              setIsDropdownOpen(open);
-              if (open) {
-                const modality = await fetchModality();
-                await fetchTemplates(modality);
-                if (!content || content.trim() === '') {
-                  const doctorBlock = buildDoctorBlock();
-                  setContent(doctorBlock);
-                }
-              }
-            }}
-          >
-            <DropdownMenuTrigger asChild>
-              <button className="bg-background border-input hover:bg-accent text-foreground hover:text-accent-foreground flex w-full items-center justify-between gap-2 rounded border px-4 py-2 text-base transition-colors">
-                <div className="flex items-center">
-                  <span>{templateName || 'Select Template'}</span>
-                </div>
-                <Icons.ChevronDown className="h-4 w-4" />
-              </button>
-            </DropdownMenuTrigger>
-
-            <DropdownMenuContent
-              align="start"
-              className="z-50 w-56"
+    <>
+      <div className={`container-report flex h-full flex-col p-4 ${isMinimized ? 'hidden' : ''}`}>
+        <div className="mb-2 flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-white">Select Templates</h2>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleMinimize}
+              className="text-primary hover:text-primary-light rounded-sm opacity-70 transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:pointer-events-none"
+              title="Minimize"
             >
-              {templates.length > 0 ? (
-                templates.map(template => (
-                  <DropdownMenuItem
-                    key={template.id}
-                    onClick={() => handleTemplateClick(template)}
-                  >
+              <Icons.Minus className="h-4 w-4" />
+              <span className="sr-only">Minimize</span>
+            </button>
+          </div>
+        </div>
+        <div className="mb-2 flex items-center gap-4">
+          <div className="flex-1">
+            <DropdownMenu
+              open={isDropdownOpen}
+              onOpenChange={async open => {
+                setIsDropdownOpen(open);
+                if (open) {
+                  const modality = await fetchModality();
+                  await fetchTemplates(modality);
+                  if (!content || content.trim() === '') {
+                    const doctorBlock = buildDoctorBlock();
+                    setContent(doctorBlock);
+                  }
+                }
+              }}
+            >
+              <DropdownMenuTrigger asChild>
+                <button className="bg-background border-input hover:bg-accent text-foreground hover:text-accent-foreground flex w-full items-center justify-between gap-2 rounded border px-4 py-2 text-base transition-colors">
+                  <div className="flex items-center">
+                    <span>{templateName || 'Select Template'}</span>
+                  </div>
+                  <Icons.ChevronDown className="h-4 w-4" />
+                </button>
+              </DropdownMenuTrigger>
+
+              <DropdownMenuContent
+                align="start"
+                className="z-50 w-56"
+              >
+                {templates.length > 0 ? (
+                  templates.map(template => (
+                    <DropdownMenuItem
+                      key={template.id}
+                      onClick={() => handleTemplateClick(template)}
+                    >
+                      <Icons.Export className="mr-2 h-4 w-4" />
+                      {template.name}
+                    </DropdownMenuItem>
+                  ))
+                ) : (
+                  <DropdownMenuItem>
                     <Icons.Export className="mr-2 h-4 w-4" />
-                    {template.name}
+                    Loading templates... (Count: {templates.length})
                   </DropdownMenuItem>
-                ))
-              ) : (
-                <DropdownMenuItem>
-                  <Icons.Export className="mr-2 h-4 w-4" />
-                  Loading templates... (Count: {templates.length})
-                </DropdownMenuItem>
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+
+          {!isDictationMode ? (
+            <Button
+              variant="default"
+              size="lg"
+              onClick={handleDictateToAI}
+              className="bg-primary text-primary-foreground hover:bg-primary/90 whitespace-nowrap px-6 py-3 text-lg"
+            >
+              Dictate to AI
+            </Button>
+          ) : (
+            <Button
+              variant="secondary"
+              size="lg"
+              onClick={handleCloseDictation}
+              className="whitespace-nowrap px-6 py-3 text-lg"
+            >
+              Close Dictation
+            </Button>
+          )}
         </div>
 
-        {!isDictationMode ? (
-          <Button
-            variant="default"
-            size="lg"
-            onClick={handleDictateToAI}
-            className="bg-primary text-primary-foreground hover:bg-primary/90 whitespace-nowrap px-6 py-3 text-lg"
-          >
-            Dictate to AI
-          </Button>
-        ) : (
-          <Button
-            variant="secondary"
-            size="lg"
-            onClick={handleCloseDictation}
-            className="whitespace-nowrap px-6 py-3 text-lg"
-          >
-            Close Dictation
-          </Button>
-        )}
+        <div className="h-full min-h-0 flex-1">
+          {isDictationMode ? (
+            <div className="flex h-full gap-4">
+              <div className="flex-1">
+                <TinyMCEEditor
+                  content={content}
+                  onSubmit={html => {
+                    const urlParams = new URLSearchParams(window.location.search);
+                    const reportId = urlParams.get('reportId');
+                    if (reportId) {
+                      handleDraftToSubmit(html, reportId);
+                    } else {
+                      handleSubmitReport(html);
+                    }
+                  }}
+                  onSaveAsDraft={handleSaveAsDraft}
+                />
+              </div>
+
+              <div className="w-1/2">
+                <DictationPanel
+                  onDictationTextChange={setDictationText}
+                  onSubmit={handleSubmitDictation}
+                  wsUrl={WS_URL}
+                  isAnalyzing={isAnalyzing}
+                />
+              </div>
+            </div>
+          ) : (
+            <TinyMCEEditor
+              content={content}
+              onSubmit={html => {
+                const urlParams = new URLSearchParams(window.location.search);
+                const reportId = urlParams.get('reportId');
+                if (reportId) {
+                  handleDraftToSubmit(html, reportId);
+                } else {
+                  handleSubmitReport(html);
+                }
+              }}
+              onSaveAsDraft={handleSaveAsDraft}
+            />
+          )}
+        </div>
       </div>
-
-      <div className="h-full min-h-0 flex-1">
-        {isDictationMode ? (
-          <div className="flex h-full gap-4">
-            <div className="flex-1">
-              <TinyMCEEditor
-                content={content}
-                onSubmit={html => {
-                  const urlParams = new URLSearchParams(window.location.search);
-                  const reportId = urlParams.get('reportId');
-                  if (reportId) {
-                    handleDraftToSubmit(html, reportId);
-                  } else {
-                    handleSubmitReport(html);
-                  }
-                }}
-                onSaveAsDraft={handleSaveAsDraft}
-              />
-            </div>
-
-            <div className="w-1/2">
-              <DictationPanel
-                onDictationTextChange={setDictationText}
-                onSubmit={handleSubmitDictation}
-                wsUrl={WS_URL}
-                isAnalyzing={isAnalyzing}
-              />
-            </div>
+      {isMinimized && (
+        <div className="fixed bottom-0 right-0 z-50 flex items-center gap-2">
+          <div className="bg-background border-border flex h-[200px] w-[400px] items-center gap-2 rounded-lg border p-2 shadow-lg">
+            <span className="text-foreground text-medium font-medium">Report Generation</span>
+            <button
+              onClick={handleMaximize}
+              className="bg-primary hover:bg-primary/90 text-primary-foreground focus:ring-primary rounded-full p-2 shadow-md transition-all duration-200 hover:scale-105 focus:outline-none focus:ring-2 focus:ring-offset-2"
+              title="Restore Report Generation Modal"
+            >
+              <Icons.Plus className="h-4 w-4" />
+            </button>
+            <button
+              onClick={hide}
+              className="text-muted-foreground hover:text-foreground hover:bg-muted focus:ring-ring rounded-full p-1 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2"
+              title="Close Report Generation Modal"
+            >
+              <Icons.Cancel className="h-3 w-3" />
+            </button>
           </div>
-        ) : (
-          <TinyMCEEditor
-            content={content}
-            onSubmit={html => {
-              const urlParams = new URLSearchParams(window.location.search);
-              const reportId = urlParams.get('reportId');
-              if (reportId) {
-                handleDraftToSubmit(html, reportId);
-              } else {
-                handleSubmitReport(html);
-              }
-            }}
-            onSaveAsDraft={handleSaveAsDraft}
-          />
-        )}
-      </div>
-    </div>
+        </div>
+      )}
+    </>
   );
 }
 

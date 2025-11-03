@@ -1,6 +1,6 @@
 import * as React from 'react';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
-import { Cross2Icon } from '@radix-ui/react-icons';
+import { Cross2Icon, MinusIcon } from '@radix-ui/react-icons';
 
 import { cn } from '../../lib/utils';
 import { useDraggable } from './useDraggable';
@@ -94,6 +94,38 @@ const DialogContent = React.forwardRef<
 
   const style = isDraggable ? { ...props.style, transform: initialTransform } : props.style;
 
+  // Track whether to show the optional minimize button next to Close
+  const [showReportMinimize, setShowReportMinimize] = React.useState<boolean>(() => {
+    try {
+      return Boolean(
+        (globalThis as unknown as { __SHOW_REPORT_MINIMIZE__?: boolean }).__SHOW_REPORT_MINIMIZE__
+      );
+    } catch {
+      return false;
+    }
+  });
+
+  React.useEffect(() => {
+    const update = () => {
+      try {
+        setShowReportMinimize(
+          Boolean(
+            (globalThis as unknown as { __SHOW_REPORT_MINIMIZE__?: boolean })
+              .__SHOW_REPORT_MINIMIZE__
+          )
+        );
+      } catch {
+        setShowReportMinimize(false);
+      }
+    };
+    window.addEventListener('ohif-report-minimize-visibility', update as EventListener);
+    // Also do a one-time sync in case the flag was flipped before mount
+    update();
+    return () => {
+      window.removeEventListener('ohif-report-minimize-visibility', update as EventListener);
+    };
+  }, []);
+
   const content = (
     <DialogPrimitive.Content
       ref={setRefs}
@@ -114,10 +146,28 @@ const DialogContent = React.forwardRef<
     >
       {children}
       {!unstyled && (
-        <DialogPrimitive.Close className="ring-offset-background focus:ring-ring data-[state=open]:bg-accent data-[state=open]:text-muted-foreground absolute right-4 top-4 rounded-sm opacity-70 transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:pointer-events-none">
-          <Cross2Icon className="text-primary h-4 w-4" />
-          <span className="sr-only">Close</span>
-        </DialogPrimitive.Close>
+        <div className="absolute right-4 top-4 flex items-center gap-2">
+          {showReportMinimize && (
+            <button
+              className="ring-offset-background focus:ring-ring rounded-sm opacity-100 transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:pointer-events-none"
+              title="Minimize"
+              onClick={() => {
+                try {
+                  window.dispatchEvent(new CustomEvent('ohif-modal-minimize'));
+                } catch (_e) {
+                  // no-op
+                }
+              }}
+            >
+              <MinusIcon className="text-primary h-4 w-4" />
+              <span className="sr-only">Minimize</span>
+            </button>
+          )}
+          <DialogPrimitive.Close className="ring-offset-background focus:ring-ring data-[state=open]:bg-accent data-[state=open]:text-muted-foreground rounded-sm opacity-70 transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:pointer-events-none">
+            <Cross2Icon className="text-primary h-4 w-4" />
+            <span className="sr-only">Close</span>
+          </DialogPrimitive.Close>
+        </div>
       )}
     </DialogPrimitive.Content>
   );

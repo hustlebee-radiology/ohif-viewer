@@ -1,5 +1,6 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { Editor } from '@tinymce/tinymce-react';
+import { StopIcon } from '@radix-ui/react-icons';
 import apiClient from '../../../../platform/app/src/utils/apiClient';
 import { getTinyMCEConfig } from '../config/tinymceConfig';
 import {
@@ -1026,6 +1027,7 @@ function DictationPanel({
             disabled={isRecording && !isPaused}
             className="flex-1"
           >
+            <Icons.Play className="mr-2 h-4 w-4" />
             {isRecording && !isPaused ? 'Recording...' : 'Start'}
           </Button>
 
@@ -1036,7 +1038,17 @@ function DictationPanel({
             disabled={!isRecording}
             className="flex-1"
           >
-            {isPaused ? 'Resume' : 'Pause'}
+            {isPaused ? (
+              <>
+                <Icons.Play className="mr-2 h-4 w-4" />
+                Resume
+              </>
+            ) : (
+              <>
+                <Icons.Pause className="mr-2 h-4 w-4" />
+                Pause
+              </>
+            )}
           </Button>
 
           <Button
@@ -1046,6 +1058,7 @@ function DictationPanel({
             disabled={!isRecording}
             className="flex-1"
           >
+            <StopIcon className="mr-2 h-4 w-4" />
             Stop
           </Button>
         </div>

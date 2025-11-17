@@ -410,7 +410,7 @@ export default function ReportGenerationModal({
 
   const [isMinimized, setIsMinimized] = useState(false);
 
-  const handleMinimize = () => {
+  const handleMinimize = useCallback(() => {
     setIsMinimized(true);
     if (show) {
       show({
@@ -420,9 +420,9 @@ export default function ReportGenerationModal({
           'fixed left-auto top-auto translate-x-0 translate-y-0 right-0 bottom-0 w-auto h-auto p-0 bg-transparent shadow-none border-none z-50',
       });
     }
-  };
+  }, [show]);
 
-  const handleMaximize = () => {
+  const handleMaximize = useCallback(() => {
     setIsMinimized(false);
     if (show) {
       show({
@@ -431,23 +431,33 @@ export default function ReportGenerationModal({
           'max-w-6xl max-h-[95vh] w-[90vw] h-[90vh] overflow-y-auto scrollbar-thin scrollbar-thumb-primary scrollbar-track-background',
       });
     }
-  };
+  }, [show]);
+
+  useEffect(() => {
+    (window as unknown as { __SHOW_REPORT_MINIMIZE__?: boolean }).__SHOW_REPORT_MINIMIZE__ = true;
+    try {
+      window.dispatchEvent(new Event('ohif-report-minimize-visibility'));
+    } catch (e) {}
+    const handle = () => {
+      handleMinimize();
+    };
+    window.addEventListener('ohif-modal-minimize', handle as unknown as EventListener);
+    return () => {
+      window.removeEventListener('ohif-modal-minimize', handle as unknown as EventListener);
+      (window as unknown as { __SHOW_REPORT_MINIMIZE__?: boolean }).__SHOW_REPORT_MINIMIZE__ =
+        false;
+      try {
+        window.dispatchEvent(new Event('ohif-report-minimize-visibility'));
+      } catch (e) {}
+    };
+  }, [handleMinimize]);
 
   return (
     <>
       <div className={`container-report flex h-full flex-col p-4 ${isMinimized ? 'hidden' : ''}`}>
         <div className="mb-2 flex items-center justify-between">
           <h2 className="text-lg font-semibold text-white">Select Templates</h2>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={handleMinimize}
-              className="text-primary hover:text-primary-light rounded-sm opacity-70 transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:pointer-events-none"
-              title="Minimize"
-            >
-              <Icons.Minus className="h-4 w-4" />
-              <span className="sr-only">Minimize</span>
-            </button>
-          </div>
+          {/* Minimize button moved next to dialog close button */}
         </div>
         <div className="mb-2 flex items-center gap-4">
           <div className="flex-1">
@@ -566,14 +576,16 @@ export default function ReportGenerationModal({
       </div>
       {isMinimized && (
         <div className="fixed bottom-0 right-0 z-50 flex items-center gap-2">
-          <div className="bg-background border-border flex h-[200px] w-[400px] items-center gap-2 rounded-lg border p-2 shadow-lg">
-            <span className="text-foreground text-medium font-medium">Report Generation</span>
+          <div className="bg-background border-border flex h-[200px] w-[400px] items-center justify-between rounded-lg border p-2 shadow-lg">
+            <span className="text-foreground text-medium font-medium">
+              {templateName ? templateName : 'Report'}
+            </span>
             <button
               onClick={handleMaximize}
-              className="bg-primary hover:bg-primary/90 text-primary-foreground focus:ring-primary rounded-full p-2 shadow-md transition-all duration-200 hover:scale-105 focus:outline-none focus:ring-2 focus:ring-offset-2"
-              title="Restore Report Generation Modal"
+              className="bg-primary hover:bg-primary/90 text-primary-foreground focus:ring-primary rounded px-3 py-1.5 text-sm font-medium transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2"
+              title="Maximize Report Generation Modal"
             >
-              <Icons.Plus className="h-4 w-4" />
+              Maximize
             </button>
             <button
               onClick={hide}

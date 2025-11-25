@@ -226,10 +226,10 @@ export default function ReportGenerationModal({
             },
           });
         } catch (error) {
-          response = await apiClient.get(`/user/${userId}`);
+          response = await apiClient.get(`/user/${userId}`, { withCredentials: true });
         }
       } else {
-        response = await apiClient.get(`/user/${userId}`);
+        response = await apiClient.get(`/user/${userId}`, { withCredentials: true });
       }
 
       const signaturePath = response.data.signatureURL;

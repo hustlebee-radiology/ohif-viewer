@@ -1,8 +1,9 @@
-import React, { useRef, useEffect, useState, useCallback } from 'react';
+import React, { useRef, useEffect, useState, useCallback, useMemo } from 'react';
 import { Editor } from '@tinymce/tinymce-react';
 import { StopIcon } from '@radix-ui/react-icons';
 import apiClient from '../../../../platform/app/src/utils/apiClient';
 import { getTinyMCEConfig } from '../config/tinymceConfig';
+import { debounceAutosave } from '../utils/debounceAutosave';
 import {
   Button,
   DropdownMenu,
@@ -429,36 +430,6 @@ export default function ReportGenerationModal({
     return urlParams.get('StudyInstanceUIDs') || '';
   };
 
-  const upsertDictationNotesSection = (baseHtml: string, notes: string): string => {
-    const html = baseHtml || '';
-    const trimmedNotes = notes.trim();
-
-    const dictationSectionRegex =
-      /<hr\s*\/?>\s*<h3>Dictation Notes<\/h3>[\s\S]*?(?=(<div[^>]*border-top:1px solid #444;padding-top:8px[^>]*>|$))/gi;
-    const cleanedHtml = html.replace(dictationSectionRegex, '');
-
-    if (!trimmedNotes) {
-      return cleanedHtml;
-    }
-
-    const dictationSection = `<hr /><h3>Dictation Notes</h3><p>${trimmedNotes.replace(
-      /\n/g,
-      '</p><p>'
-    )}</p>`;
-
-    const doctorBlockMarker =
-      '<div style="margin-top:24px;border-top:1px solid #444;padding-top:8px';
-    const doctorIndex = cleanedHtml.indexOf(doctorBlockMarker);
-
-    if (doctorIndex !== -1) {
-      return `${cleanedHtml.slice(0, doctorIndex)}${dictationSection}${cleanedHtml.slice(
-        doctorIndex
-      )}`;
-    }
-
-    return `${cleanedHtml}${dictationSection}`;
-  };
-
   useEffect(() => {
     if (isDropdownOpen && templates.length === 0) {
       fetchTemplates();
@@ -624,11 +595,6 @@ export default function ReportGenerationModal({
                 <DictationPanel
                   onDictationTextChange={setDictationText}
                   onSubmit={handleSubmitDictation}
-                  onAutoSave={(text: string) => {
-                    const combinedHtmlContent = upsertDictationNotesSection(content || '', text);
-                    setContent(combinedHtmlContent);
-                    handleSaveAsDraft(combinedHtmlContent);
-                  }}
                   wsUrl={WS_URL}
                   isAnalyzing={isAnalyzing}
                 />
@@ -689,6 +655,10 @@ function TinyMCEEditor({
 }) {
   const editorRef = useRef<{ getContent: () => string } | null>(null);
   const [hasContent, setHasContent] = useState(false);
+  const debouncedSaveDraft = useMemo(
+    () => debounceAutosave((value: string) => onSaveAsDraft(value), 10000),
+    [onSaveAsDraft]
+  );
 
   useEffect(() => {
     if (content && content.trim() !== '' && content !== '<p>&nbsp;</p>') {
@@ -756,6 +726,13 @@ function TinyMCEEditor({
                       initialContent.trim() !== '' &&
                       initialContent !== '<p>&nbsp;</p>'
                   );
+                  if (
+                    initialContent &&
+                    initialContent.trim() !== '' &&
+                    initialContent !== '<p>&nbsp;</p>'
+                  ) {
+                    debouncedSaveDraft(initialContent);
+                  }
                 });
 
                 editor.on('input change keyup', () => {
@@ -765,6 +742,9 @@ function TinyMCEEditor({
                     currentContent.trim() !== '' &&
                     currentContent !== '<p>&nbsp;</p>';
                   setHasContent(hasValidContent);
+                  if (hasValidContent) {
+                    debouncedSaveDraft(currentContent);
+                  }
                 });
               },
             }}
@@ -805,42 +785,14 @@ function TinyMCEEditor({
 function DictationPanel({
   onDictationTextChange,
   onSubmit,
-  onAutoSave,
   isAnalyzing,
   wsUrl,
 }: {
   onDictationTextChange: (text: string) => void;
   onSubmit: () => void;
-  onAutoSave?: (text: string) => void;
   wsUrl: string;
   isAnalyzing?: boolean;
 }) {
-  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const onAutoSaveRef = useRef(onAutoSave);
-
-  useEffect(() => {
-    onAutoSaveRef.current = onAutoSave;
-  }, [onAutoSave]);
-
-  const debouncedAutoSave = useCallback((text: string) => {
-    if (timeoutRef.current) {
-      clearTimeout(timeoutRef.current);
-    }
-    timeoutRef.current = setTimeout(() => {
-      if (onAutoSaveRef.current && text.trim()) {
-        onAutoSaveRef.current(text);
-      }
-    }, 10000);
-  }, []);
-
-  useEffect(() => {
-    return () => {
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
-      }
-    };
-  }, []);
-
   const [isRecording, setIsRecording] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [dictationText, setDictationText] = useState('');
@@ -1189,7 +1141,6 @@ function DictationPanel({
               const newText = e.currentTarget.textContent || '';
               setDictationText(newText);
               onDictationTextChange(newText);
-              debouncedAutoSave(newText);
             }}
           >
             {dictationText || accumulatedFinalText || currentFinalText || currentInterimText ? (

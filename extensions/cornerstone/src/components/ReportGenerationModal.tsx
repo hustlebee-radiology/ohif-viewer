@@ -374,13 +374,51 @@ export default function ReportGenerationModal({
       return;
     }
 
+    const urlParams = new URLSearchParams(window.location.search);
+    const reportId = urlParams.get('reportId');
+    const token =
+      localStorage.getItem('token') ||
+      sessionStorage.getItem('token') ||
+      localStorage.getItem('accessToken') ||
+      sessionStorage.getItem('accessToken') ||
+      localStorage.getItem('jwt') ||
+      sessionStorage.getItem('jwt') ||
+      (document.cookie.match(/(?:^|; )(?:authToken|accessToken|token|jwt)=([^;]*)/) || [])[1];
+
+    const authConfig = token
+      ? {
+          headers: { Authorization: `Bearer ${decodeURIComponent(token)}` },
+          withCredentials: true,
+        }
+      : { withCredentials: true };
+
     try {
-      await apiClient.post('/report', {
-        studyInstanceUID: studyInstanceUID,
-        htmlContent: htmlContent,
-        status: 'draft',
-      });
-      alert('Draft saved successfully!');
+      if (reportId) {
+        await apiClient.patch(
+          `/report/${reportId}`,
+          {
+            htmlContent,
+            status: 'draft',
+          },
+          authConfig
+        );
+      } else {
+        const response = await apiClient.post(
+          '/report',
+          {
+            studyInstanceUID,
+            htmlContent,
+            status: 'draft',
+          },
+          authConfig
+        );
+        const newReportId = response?.data?.report?.id ?? response?.data?.id;
+        if (newReportId) {
+          const url = new URL(window.location.href);
+          url.searchParams.set('reportId', newReportId);
+          window.history.replaceState({}, '', url.toString());
+        }
+      }
     } catch (error) {
       console.error('Error saving draft:', error);
     }
@@ -389,6 +427,36 @@ export default function ReportGenerationModal({
   const getStudyInstanceUID = () => {
     const urlParams = new URLSearchParams(window.location.search);
     return urlParams.get('StudyInstanceUIDs') || '';
+  };
+
+  const upsertDictationNotesSection = (baseHtml: string, notes: string): string => {
+    const html = baseHtml || '';
+    const trimmedNotes = notes.trim();
+
+    const dictationSectionRegex =
+      /<hr\s*\/?>\s*<h3>Dictation Notes<\/h3>[\s\S]*?(?=(<div[^>]*border-top:1px solid #444;padding-top:8px[^>]*>|$))/gi;
+    const cleanedHtml = html.replace(dictationSectionRegex, '');
+
+    if (!trimmedNotes) {
+      return cleanedHtml;
+    }
+
+    const dictationSection = `<hr /><h3>Dictation Notes</h3><p>${trimmedNotes.replace(
+      /\n/g,
+      '</p><p>'
+    )}</p>`;
+
+    const doctorBlockMarker =
+      '<div style="margin-top:24px;border-top:1px solid #444;padding-top:8px';
+    const doctorIndex = cleanedHtml.indexOf(doctorBlockMarker);
+
+    if (doctorIndex !== -1) {
+      return `${cleanedHtml.slice(0, doctorIndex)}${dictationSection}${cleanedHtml.slice(
+        doctorIndex
+      )}`;
+    }
+
+    return `${cleanedHtml}${dictationSection}`;
   };
 
   useEffect(() => {
@@ -437,7 +505,9 @@ export default function ReportGenerationModal({
     (window as unknown as { __SHOW_REPORT_MINIMIZE__?: boolean }).__SHOW_REPORT_MINIMIZE__ = true;
     try {
       window.dispatchEvent(new Event('ohif-report-minimize-visibility'));
-    } catch (e) {}
+    } catch (e) {
+      console.error('Error dispatching event:', e);
+    }
     const handle = () => {
       handleMinimize();
     };
@@ -448,7 +518,9 @@ export default function ReportGenerationModal({
         false;
       try {
         window.dispatchEvent(new Event('ohif-report-minimize-visibility'));
-      } catch (e) {}
+      } catch (e) {
+        console.error('Error dispatching event:', e);
+      }
     };
   }, [handleMinimize]);
 
@@ -552,6 +624,11 @@ export default function ReportGenerationModal({
                 <DictationPanel
                   onDictationTextChange={setDictationText}
                   onSubmit={handleSubmitDictation}
+                  onAutoSave={(text: string) => {
+                    const combinedHtmlContent = upsertDictationNotesSection(content || '', text);
+                    setContent(combinedHtmlContent);
+                    handleSaveAsDraft(combinedHtmlContent);
+                  }}
                   wsUrl={WS_URL}
                   isAnalyzing={isAnalyzing}
                 />
@@ -728,14 +805,42 @@ function TinyMCEEditor({
 function DictationPanel({
   onDictationTextChange,
   onSubmit,
+  onAutoSave,
   isAnalyzing,
   wsUrl,
 }: {
   onDictationTextChange: (text: string) => void;
   onSubmit: () => void;
+  onAutoSave?: (text: string) => void;
   wsUrl: string;
   isAnalyzing?: boolean;
 }) {
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const onAutoSaveRef = useRef(onAutoSave);
+
+  useEffect(() => {
+    onAutoSaveRef.current = onAutoSave;
+  }, [onAutoSave]);
+
+  const debouncedAutoSave = useCallback((text: string) => {
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+    }
+    timeoutRef.current = setTimeout(() => {
+      if (onAutoSaveRef.current && text.trim()) {
+        onAutoSaveRef.current(text);
+      }
+    }, 10000);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+    };
+  }, []);
+
   const [isRecording, setIsRecording] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [dictationText, setDictationText] = useState('');
@@ -1084,6 +1189,7 @@ function DictationPanel({
               const newText = e.currentTarget.textContent || '';
               setDictationText(newText);
               onDictationTextChange(newText);
+              debouncedAutoSave(newText);
             }}
           >
             {dictationText || accumulatedFinalText || currentFinalText || currentInterimText ? (

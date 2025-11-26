@@ -1,4 +1,5 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
+import ReactDOM from 'react-dom';
 import { Editor } from '@tinymce/tinymce-react';
 import apiClient from '../../../../platform/app/src/utils/apiClient';
 import { getTinyMCEConfig } from '../config/tinymceConfig';
@@ -42,6 +43,7 @@ export default function ReportGenerationModal({
     WS_ENV || ((window as AppWindow).config?.NEXT_API_BASE_URL?.replace(/^http/, 'ws') ?? '');
   const DOCTOR_REPORT_URL: string | undefined = (window as AppWindow).config
     ?.NEXT_DOCTOR_REPORT_URL;
+  const [isMinimized, setIsMinimized] = useState(false);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [templates, setTemplates] = useState<
     Array<{ id: string; name: string; htmlContent: string }>
@@ -394,9 +396,100 @@ export default function ReportGenerationModal({
     fetchDoctorDetails();
   }, [fetchDoctorDetails]);
 
+  // Handle backdrop visibility when minimized
+  useEffect(() => {
+    if (typeof document === 'undefined') {
+      return;
+    }
+
+    // Find the dialog overlay (backdrop) element
+    const overlay = document.querySelector('[data-radix-dialog-overlay]');
+    if (overlay instanceof HTMLElement) {
+      if (isMinimized) {
+        overlay.style.display = 'none';
+      } else {
+        overlay.style.display = '';
+      }
+    }
+
+    return () => {
+      // Restore overlay on unmount
+      if (overlay instanceof HTMLElement) {
+        overlay.style.display = '';
+      }
+    };
+  }, [isMinimized]);
+
+  // Minimized view - render via portal to appear outside modal container
+  if (isMinimized) {
+    const minimizedView = (
+      <div
+        className="border-primary bg-card hover:shadow-primary/20 fixed bottom-4 right-4 flex w-80 items-center justify-between gap-3 rounded-lg border p-4 shadow-2xl transition-all duration-200"
+        style={{ zIndex: 9999 }}
+      >
+        <div className="flex-1 truncate">
+          <h3 className="text-foreground truncate text-sm font-semibold">
+            {templateName || 'Report Generation'}
+          </h3>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setIsMinimized(false)}
+            className="hover:bg-accent hover:text-primary h-8 w-8 p-0"
+            title="Maximize"
+          >
+            <Icons.ToolExpand className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={hide}
+            className="hover:bg-accent hover:text-destructive h-8 w-8 p-0"
+            title="Close"
+          >
+            <Icons.Close className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+    );
+
+    // Also return an invisible div to keep the modal open but hidden
+    return (
+      <>
+        <div className="h-0 w-0 overflow-hidden" />
+        {typeof document !== 'undefined' && ReactDOM.createPortal(minimizedView, document.body)}
+      </>
+    );
+  }
+
+  // Maximized view
   return (
     <div className="container-report flex h-full flex-col p-4">
-      <h2 className="mb-2 text-lg font-semibold text-white">Select Templates</h2>
+      <div className="mb-2 flex items-center justify-between">
+        <h2 className="text-foreground text-lg font-semibold">Select Templates</h2>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setIsMinimized(true)}
+            className="hover:bg-accent hover:text-primary h-8 w-8 p-0"
+            title="Minimize"
+          >
+            <Icons.Minus className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={hide}
+            className="hover:bg-accent hover:text-destructive h-8 w-8 p-0"
+            title="Close"
+          >
+            <Icons.Close className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
       <div className="mb-2 flex items-center gap-4">
         <div className="flex-1">
           <DropdownMenu
@@ -659,9 +752,100 @@ function DictationPanel({
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [statusMessage, setStatusMessage] = useState<string>('');
 
+  // Audio visualization state/refs
+  const [audioLevels, setAudioLevels] = useState<number[]>(() => Array(16).fill(0));
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const sourceNodeRef = useRef<MediaStreamAudioSourceNode | null>(null);
+  const animationFrameRef = useRef<number | null>(null);
+
   const wsRef = useRef<WebSocket | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
+
+  const stopAudioVisualization = () => {
+    if (animationFrameRef.current !== null) {
+      cancelAnimationFrame(animationFrameRef.current);
+      animationFrameRef.current = null;
+    }
+
+    if (sourceNodeRef.current) {
+      try {
+        sourceNodeRef.current.disconnect();
+      } catch (error) {
+        console.error('Error disconnecting audio source node:', error);
+      }
+      sourceNodeRef.current = null;
+    }
+
+    if (audioContextRef.current) {
+      // Close the audio context to release system audio resources
+      audioContextRef.current.close().catch(err => {
+        console.error('Error closing audio context:', err);
+      });
+      audioContextRef.current = null;
+    }
+
+    analyserRef.current = null;
+    // Gently reset the waveform to a flat line
+    setAudioLevels(Array(16).fill(0));
+  };
+
+  const startAudioVisualization = (stream: MediaStream) => {
+    // Clean up any existing visualization first
+    stopAudioVisualization();
+
+    const AudioCtx = (window as any).AudioContext || (window as any).webkitAudioContext;
+    if (!AudioCtx) {
+      // Browser doesn't support AudioContext; skip visualization gracefully
+      return;
+    }
+
+    const audioCtx = new AudioCtx();
+    const analyser = audioCtx.createAnalyser();
+    const source = audioCtx.createMediaStreamSource(stream);
+
+    analyser.fftSize = 256;
+    source.connect(analyser);
+
+    audioContextRef.current = audioCtx;
+    analyserRef.current = analyser;
+    sourceNodeRef.current = source;
+
+    const bufferLength = analyser.frequencyBinCount;
+    const dataArray = new Uint8Array(bufferLength);
+    const barCount = 16;
+
+    const draw = () => {
+      if (!analyserRef.current) {
+        return;
+      }
+
+      analyserRef.current.getByteFrequencyData(dataArray);
+
+      const sliceSize = Math.max(1, Math.floor(bufferLength / barCount));
+      const levels: number[] = [];
+
+      for (let i = 0; i < barCount; i++) {
+        const start = i * sliceSize;
+        const end = Math.min(start + sliceSize, bufferLength);
+        let sum = 0;
+
+        for (let j = start; j < end; j++) {
+          sum += dataArray[j];
+        }
+
+        const avg = sum / (end - start || 1);
+        // Normalize to 0–1
+        levels.push(avg / 255);
+      }
+
+      setAudioLevels(levels);
+      animationFrameRef.current = requestAnimationFrame(draw);
+    };
+
+    draw();
+  };
 
   const cleanupResources = () => {
     if (mediaRecorderRef.current) {
@@ -684,6 +868,9 @@ function DictationPanel({
       }
       wsRef.current = null;
     }
+
+    // Also stop audio visualization resources
+    stopAudioVisualization();
   };
 
   const handleStartRecording = async () => {
@@ -725,6 +912,10 @@ function DictationPanel({
         stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         console.log('✅ [Dictation] Microphone permission granted');
         mediaStreamRef.current = stream;
+
+        // Start waveform visualization from the live microphone stream immediately
+        // so it works even if the WebSocket never connects.
+        startAudioVisualization(stream);
       } catch (micError: unknown) {
         console.error('❌ [Dictation] Microphone permission denied or error:', micError);
         const errorMsg =
@@ -944,7 +1135,84 @@ function DictationPanel({
   return (
     <Card className="h-full">
       <CardHeader className="pb-3">
-        <CardTitle className="text-lg font-semibold">Dictation</CardTitle>
+        <div className="flex items-center justify-between gap-3">
+          <CardTitle className="text-lg font-semibold">Dictation</CardTitle>
+
+          {/* Enlarged mic + double pulsing visualization in header (right side) */}
+          {(() => {
+            const averageLevel =
+              audioLevels.length > 0
+                ? audioLevels.reduce((sum, v) => sum + v, 0) / audioLevels.length
+                : 0;
+            const clampedLevel = Math.max(0, Math.min(1, averageLevel));
+
+            const isActive = isRecording && !isPaused;
+            const pulseScale = isActive ? 1 + clampedLevel * 1.4 : 1;
+            const pulseOpacity = isActive ? 0.35 + clampedLevel * 0.6 : 0.22;
+
+            return (
+              <div className="relative h-9 w-9 shrink-0" aria-hidden="true">
+                {/* Primary colored pulsing ring */}
+                <div
+                  className="absolute inset-0 rounded-full bg-emerald-500/40"
+                  style={{
+                    transform: `scale(${pulseScale})`,
+                    opacity: pulseOpacity,
+                    transition:
+                      'transform 80ms linear, opacity 80ms linear, box-shadow 80ms linear',
+                    boxShadow: isActive
+                      ? `0 0 0 2px rgba(16, 185, 129, ${0.35 + clampedLevel * 0.5})`
+                      : '0 0 0 1px rgba(75, 85, 99, 0.6)',
+                  }}
+                />
+
+                {/* Secondary white pulsing ring (slightly larger, only when active) */}
+                <div
+                  className="absolute inset-0 rounded-full"
+                  style={{
+                    transform: `scale(${isActive ? 1.3 + clampedLevel * 0.7 : 1.15})`,
+                    opacity: isActive ? 0.18 + clampedLevel * 0.5 : 0,
+                    border: '2px solid rgba(255,255,255,0.9)',
+                    transition: 'transform 90ms linear, opacity 90ms linear',
+                  }}
+                />
+
+                {/* Inner mic circle */}
+                <div
+                  className={`relative flex h-full w-full items-center justify-center rounded-full text-[11px] ${
+                    isActive
+                      ? 'bg-emerald-500/20 text-emerald-100'
+                      : 'bg-[#111827] text-gray-200'
+                  }`}
+                  title={
+                    isRecording
+                      ? isPaused
+                        ? 'Recording paused'
+                        : 'Listening...'
+                      : 'Click Start below to begin dictation'
+                  }
+                >
+                  {/* Lucide-style mic icon */}
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 24 24"
+                    className="h-4.5 w-4.5"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z" />
+                    <path d="M19 10a7 7 0 0 1-14 0" />
+                    <line x1="12" y1="19" x2="12" y2="22" />
+                    <line x1="8" y1="22" x2="16" y2="22" />
+                  </svg>
+                </div>
+              </div>
+            );
+          })()}
+        </div>
       </CardHeader>
       <CardContent className="flex h-full flex-col space-y-4">
         <div className="muted-foreground space-y-1 text-sm">

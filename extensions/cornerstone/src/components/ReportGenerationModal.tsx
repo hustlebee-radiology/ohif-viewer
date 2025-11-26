@@ -1,8 +1,9 @@
-import React, { useRef, useEffect, useState, useCallback } from 'react';
+import React, { useRef, useEffect, useState, useCallback, useMemo } from 'react';
 import { Editor } from '@tinymce/tinymce-react';
 import { StopIcon } from '@radix-ui/react-icons';
 import apiClient from '../../../../platform/app/src/utils/apiClient';
 import { getTinyMCEConfig } from '../config/tinymceConfig';
+import { debounceAutosave } from '../utils/debounceAutosave';
 import {
   Button,
   DropdownMenu,
@@ -374,13 +375,51 @@ export default function ReportGenerationModal({
       return;
     }
 
+    const urlParams = new URLSearchParams(window.location.search);
+    const reportId = urlParams.get('reportId');
+    const token =
+      localStorage.getItem('token') ||
+      sessionStorage.getItem('token') ||
+      localStorage.getItem('accessToken') ||
+      sessionStorage.getItem('accessToken') ||
+      localStorage.getItem('jwt') ||
+      sessionStorage.getItem('jwt') ||
+      (document.cookie.match(/(?:^|; )(?:authToken|accessToken|token|jwt)=([^;]*)/) || [])[1];
+
+    const authConfig = token
+      ? {
+          headers: { Authorization: `Bearer ${decodeURIComponent(token)}` },
+          withCredentials: true,
+        }
+      : { withCredentials: true };
+
     try {
-      await apiClient.post('/report', {
-        studyInstanceUID: studyInstanceUID,
-        htmlContent: htmlContent,
-        status: 'draft',
-      });
-      alert('Draft saved successfully!');
+      if (reportId) {
+        await apiClient.patch(
+          `/report/${reportId}`,
+          {
+            htmlContent,
+            status: 'draft',
+          },
+          authConfig
+        );
+      } else {
+        const response = await apiClient.post(
+          '/report',
+          {
+            studyInstanceUID,
+            htmlContent,
+            status: 'draft',
+          },
+          authConfig
+        );
+        const newReportId = response?.data?.report?.id ?? response?.data?.id;
+        if (newReportId) {
+          const url = new URL(window.location.href);
+          url.searchParams.set('reportId', newReportId);
+          window.history.replaceState({}, '', url.toString());
+        }
+      }
     } catch (error) {
       console.error('Error saving draft:', error);
     }
@@ -437,7 +476,9 @@ export default function ReportGenerationModal({
     (window as unknown as { __SHOW_REPORT_MINIMIZE__?: boolean }).__SHOW_REPORT_MINIMIZE__ = true;
     try {
       window.dispatchEvent(new Event('ohif-report-minimize-visibility'));
-    } catch (e) {}
+    } catch (e) {
+      console.error('Error dispatching event:', e);
+    }
     const handle = () => {
       handleMinimize();
     };
@@ -448,7 +489,9 @@ export default function ReportGenerationModal({
         false;
       try {
         window.dispatchEvent(new Event('ohif-report-minimize-visibility'));
-      } catch (e) {}
+      } catch (e) {
+        console.error('Error dispatching event:', e);
+      }
     };
   }, [handleMinimize]);
 
@@ -612,6 +655,10 @@ function TinyMCEEditor({
 }) {
   const editorRef = useRef<{ getContent: () => string } | null>(null);
   const [hasContent, setHasContent] = useState(false);
+  const debouncedSaveDraft = useMemo(
+    () => debounceAutosave((value: string) => onSaveAsDraft(value), 10000),
+    [onSaveAsDraft]
+  );
 
   useEffect(() => {
     if (content && content.trim() !== '' && content !== '<p>&nbsp;</p>') {
@@ -679,6 +726,13 @@ function TinyMCEEditor({
                       initialContent.trim() !== '' &&
                       initialContent !== '<p>&nbsp;</p>'
                   );
+                  if (
+                    initialContent &&
+                    initialContent.trim() !== '' &&
+                    initialContent !== '<p>&nbsp;</p>'
+                  ) {
+                    debouncedSaveDraft(initialContent);
+                  }
                 });
 
                 editor.on('input change keyup', () => {
@@ -688,6 +742,9 @@ function TinyMCEEditor({
                     currentContent.trim() !== '' &&
                     currentContent !== '<p>&nbsp;</p>';
                   setHasContent(hasValidContent);
+                  if (hasValidContent) {
+                    debouncedSaveDraft(currentContent);
+                  }
                 });
               },
             }}

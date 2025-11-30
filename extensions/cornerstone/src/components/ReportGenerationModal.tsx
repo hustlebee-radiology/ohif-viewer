@@ -205,31 +205,16 @@ export default function ReportGenerationModal({
         return;
       }
 
-      const token =
-        localStorage.getItem('token') ||
-        sessionStorage.getItem('token') ||
-        localStorage.getItem('accessToken') ||
-        sessionStorage.getItem('accessToken') ||
-        localStorage.getItem('jwt') ||
-        sessionStorage.getItem('jwt') ||
-        getCookie('authToken') ||
-        getCookie('token') ||
-        getCookie('accessToken') ||
-        getCookie('jwt');
-
       let response;
 
-      if (token) {
-        try {
-          response = await apiClient.get(`/user/${userId}`, {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-            withCredentials: true,
-          });
-        } catch (error) {
-          console.error('Error fetching doctor details:', error);
-        }
+      try {
+        response = await apiClient.get(`/user/${userId}`, {
+          withCredentials: true,
+        });
+
+        console.log('response', response);
+      } catch (error) {
+        console.error('Error fetching doctor details:', error);
       }
 
       const signaturePath = response.signatureURL;
@@ -239,8 +224,6 @@ export default function ReportGenerationModal({
           : `${(window as AppWindow).config?.NEXT_API_BASE_URL ?? ''}${signaturePath}`
         : null;
 
-      console.log('response', response);
-      console.log('signatureUrl', signatureUrl);
       setDoctorInfo({
         name: response.data.fullName || 'Unknown Doctor',
         signatureUrl: signatureUrl,

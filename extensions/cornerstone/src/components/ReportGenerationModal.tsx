@@ -232,13 +232,15 @@ export default function ReportGenerationModal({
         }
       }
 
-      const signaturePath = response.data.signatureURL;
+      const signaturePath = response.signatureURL;
       const signatureUrl = signaturePath
         ? signaturePath.startsWith('http')
           ? signaturePath
           : `${(window as AppWindow).config?.NEXT_API_BASE_URL ?? ''}${signaturePath}`
         : null;
 
+      console.log('response', response);
+      console.log('signatureUrl', signatureUrl);
       setDoctorInfo({
         name: response.data.fullName || 'Unknown Doctor',
         signatureUrl: signatureUrl,

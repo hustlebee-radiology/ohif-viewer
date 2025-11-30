@@ -225,12 +225,11 @@ export default function ReportGenerationModal({
             headers: {
               Authorization: `Bearer ${token}`,
             },
+            withCredentials: true,
           });
         } catch (error) {
-          response = await apiClient.get(`/user/${userId}`);
+          console.error('Error fetching doctor details:', error);
         }
-      } else {
-        response = await apiClient.get(`/user/${userId}`);
       }
 
       const signaturePath = response.data.signatureURL;

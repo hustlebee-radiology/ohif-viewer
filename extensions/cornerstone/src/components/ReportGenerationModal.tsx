@@ -217,7 +217,7 @@ export default function ReportGenerationModal({
         console.error('Error fetching doctor details:', error);
       }
 
-      const signaturePath = response.signatureURL;
+      const signaturePath = response.data.signatureURL;
       const signatureUrl = signaturePath
         ? signaturePath.startsWith('http')
           ? signaturePath
